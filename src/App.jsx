@@ -13,6 +13,25 @@ export default function App() {
   const [session, setSession] = useState(undefined) // undefined = still checking, null = signed out
   const [profile, setProfile] = useState(undefined) // undefined = still checking, null = no profile yet
   const [view, setView] = useState('today')
+  const [navCollapsed, setNavCollapsed] = useState(() => {
+    try {
+      return localStorage.getItem('flowify-nav-collapsed') === '1'
+    } catch {
+      return false
+    }
+  })
+
+  function toggleNavCollapsed() {
+    setNavCollapsed((prev) => {
+      const next = !prev
+      try {
+        localStorage.setItem('flowify-nav-collapsed', next ? '1' : '0')
+      } catch {
+        // Private browsing / storage disabled — collapsing still works for this session, just won't be remembered.
+      }
+      return next
+    })
+  }
 
   // Watch auth state: check for an existing session on load, then keep
   // listening for sign in / sign out events.
@@ -74,8 +93,14 @@ export default function App() {
   }
 
   return (
-    <div className="app-shell">
-      <Sidebar profile={profile} view={view} onChangeView={setView} />
+    <div className={'app-shell' + (navCollapsed ? ' nav-collapsed' : '')}>
+      <Sidebar
+        profile={profile}
+        view={view}
+        onChangeView={setView}
+        collapsed={navCollapsed}
+        onToggleCollapsed={toggleNavCollapsed}
+      />
       <div className="app-main">
         {view === 'today' && <Today profile={profile} />}
         {view === 'tasks' && <TasksHabits profile={profile} />}
