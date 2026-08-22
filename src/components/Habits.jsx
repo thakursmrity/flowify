@@ -1,35 +1,11 @@
 import { useEffect, useState } from 'react'
 import { supabase } from '../supabaseClient'
+import { todayISO, computeStreak } from '../lib/dates'
 
 // Habits used to share a page with Tasks. Split out on its own because
 // habits are the one tracker that stays personal-only forever, no sharing,
 // no "shared with," which made it worth its own spot in the sidebar rather
 // than living inside a combined "Tasks & Habits" page.
-
-function todayISO() {
-  const d = new Date()
-  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
-}
-
-function addDays(iso, n) {
-  const d = new Date(iso + 'T00:00:00')
-  d.setDate(d.getDate() + n)
-  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
-}
-
-// Current streak = consecutive logged days ending today (if today is
-// already logged) or ending yesterday (if today just hasn't happened yet —
-// we don't want a streak to visually die the moment you wake up).
-function computeStreak(logDates, today) {
-  const set = new Set(logDates)
-  let cursor = set.has(today) ? today : addDays(today, -1)
-  let streak = 0
-  while (set.has(cursor)) {
-    streak += 1
-    cursor = addDays(cursor, -1)
-  }
-  return streak
-}
 
 export default function Habits({ profile }) {
   const today = todayISO()
@@ -105,7 +81,11 @@ export default function Habits({ profile }) {
       <h1>Habits</h1>
       <p className="view-subtitle">Personal, daily, just for you, no one else ever sees this list.</p>
 
-      <div className="card card-wide">
+      <div className="card card-wide card-accent-personal">
+        <div className="card-head">
+          <h3>Your habits</h3>
+          <span className="layer-tag">Personal</span>
+        </div>
         <form className="inline-form" onSubmit={addHabit}>
           <input
             type="text"
