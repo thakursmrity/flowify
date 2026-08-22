@@ -4,6 +4,7 @@ A working productivity app: a daily planner (tasks, habits, goals) plus messagin
 one-to-one "Current" conversations and group "Sync" conversations, all live on a
 real database with real accounts.
 
+
 This isn't a mockup, everything described below actually reads and writes to a
 real Supabase project. It's intentionally still an MVP: no file attachments, no
 read receipts, no notifications yet, no way to add someone to an existing Sync
