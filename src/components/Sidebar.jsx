@@ -2,18 +2,27 @@ import { supabase } from '../supabaseClient'
 
 const NAV_ITEMS = [
   { key: 'today', label: 'Today', icon: '☀' },
-  { key: 'tasks', label: 'Tasks & Habits', icon: '✓' },
+  { key: 'focus', label: 'Focus', icon: '◐', soon: true },
+  { key: 'habits', label: 'Habits', icon: '↻' },
+  { key: 'journal', label: 'Journal', icon: '✎', soon: true },
+  { key: 'tasks', label: 'Tasks', icon: '✓' },
   { key: 'goals', label: 'Goals', icon: '◎' },
-  { key: 'messages', label: 'Current & Sync', icon: '∿' },
+  { key: 'messages', label: 'Messages', icon: '∿' },
+]
+
+const THEMES = [
+  { key: 'ocean', label: 'Ocean', swatch: '#1f8a8c' },
+  { key: 'forest', label: 'Forest', swatch: '#4c7a3f' },
+  { key: 'sky', label: 'Sky', swatch: '#2f8fd0' },
+  { key: 'dark', label: 'Dark', swatch: '#35b0ac' },
 ]
 
 // Left-hand app nav, always visible. Switches which main view is shown,
-// carries the signed-in user's identity + sign-out control, and can be
-// collapsed down to just icons to give the main view more room. The
-// collapse/expand handle floats on the seam between the nav and the main
-// view (top-right edge of the sidebar), like a drawer being pushed in or
-// pulled back out.
-export default function Sidebar({ profile, view, onChangeView, collapsed, onToggleCollapsed }) {
+// carries the signed-in user's identity, theme picker, and sign-out control,
+// and can be collapsed down to just icons to give the main view more room.
+// A couple of items (Focus, Journal) are visible but not built yet, they're
+// marked "soon" rather than hidden so the eventual shape of the app is clear.
+export default function Sidebar({ profile, view, onChangeView, collapsed, onToggleCollapsed, theme, onChangeTheme }) {
   return (
     <div className={'app-nav' + (collapsed ? ' collapsed' : '')}>
       <button
@@ -33,17 +42,41 @@ export default function Sidebar({ profile, view, onChangeView, collapsed, onTogg
         {NAV_ITEMS.map((item) => (
           <button
             key={item.key}
-            className={'app-nav-item' + (view === item.key ? ' active' : '')}
-            onClick={() => onChangeView(item.key)}
-            title={collapsed ? item.label : undefined}
+            className={'app-nav-item' + (view === item.key ? ' active' : '') + (item.soon ? ' soon' : '')}
+            onClick={() => !item.soon && onChangeView(item.key)}
+            disabled={item.soon}
+            title={collapsed ? item.label + (item.soon ? ' (coming soon)' : '') : undefined}
           >
             <span className="app-nav-icon" aria-hidden="true">
               {item.icon}
             </span>
-            {!collapsed && item.label}
+            {!collapsed && (
+              <span className="app-nav-item-label">
+                {item.label}
+                {item.soon && <span className="soon-tag">soon</span>}
+              </span>
+            )}
           </button>
         ))}
       </nav>
+
+      {!collapsed && (
+        <div className="app-nav-theme">
+          <div className="app-nav-theme-label">Theme</div>
+          <div className="app-nav-theme-row">
+            {THEMES.map((t) => (
+              <button
+                key={t.key}
+                className={'theme-swatch' + (theme === t.key ? ' active' : '')}
+                style={{ background: t.swatch }}
+                onClick={() => onChangeTheme(t.key)}
+                aria-label={`Switch to ${t.label} theme`}
+                title={t.label}
+              />
+            ))}
+          </div>
+        </div>
+      )}
 
       <div className="app-nav-footer">
         <div className="app-nav-user">
