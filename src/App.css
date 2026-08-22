@@ -34,9 +34,14 @@
 
 .app-shell {
   display: grid;
-  grid-template-columns: 240px 1fr;
+  grid-template-columns: var(--nav-width, 240px) 1fr;
   height: 100vh;
   background: var(--bg);
+  transition: grid-template-columns 0.15s ease;
+}
+
+.app-shell.nav-collapsed {
+  --nav-width: 64px;
 }
 
 .app-main {
@@ -158,11 +163,40 @@
   overflow: hidden;
 }
 
+.app-nav-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 16px 12px 8px 20px;
+}
+
+.app-nav.collapsed .app-nav-header {
+  padding: 16px 10px 8px;
+  justify-content: center;
+}
+
 .app-nav-brand {
   font-weight: 700;
   font-size: 18px;
-  padding: 22px 20px 8px;
   letter-spacing: 0.2px;
+  white-space: nowrap;
+}
+
+.app-nav-collapse-btn {
+  background: rgba(255, 255, 255, 0.08);
+  border: none;
+  color: #cfe7e7;
+  width: 26px;
+  height: 26px;
+  border-radius: 8px;
+  font-size: 13px;
+  line-height: 1;
+  flex-shrink: 0;
+}
+
+.app-nav-collapse-btn:hover {
+  background: rgba(255, 255, 255, 0.16);
+  color: #fff;
 }
 
 .app-nav-list {
@@ -171,6 +205,10 @@
   gap: 2px;
   padding: 12px 12px;
   flex: 1;
+}
+
+.app-nav.collapsed .app-nav-list {
+  padding: 12px 10px;
 }
 
 .app-nav-item {
@@ -184,6 +222,13 @@
   padding: 10px 12px;
   border-radius: 10px;
   font-size: 14px;
+  white-space: nowrap;
+  overflow: hidden;
+}
+
+.app-nav.collapsed .app-nav-item {
+  justify-content: center;
+  padding: 10px;
 }
 
 .app-nav-item:hover {
@@ -206,11 +251,26 @@
   border-top: 1px solid rgba(255, 255, 255, 0.12);
 }
 
+.app-nav.collapsed .app-nav-footer {
+  padding: 14px 8px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+
 .app-nav-user {
   display: flex;
   align-items: center;
   gap: 10px;
   margin-bottom: 10px;
+}
+
+.app-nav.collapsed .app-nav-user {
+  margin-bottom: 8px;
+}
+
+.app-nav.collapsed .link-button {
+  font-size: 16px;
 }
 
 .app-nav-name {
