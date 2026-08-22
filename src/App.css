@@ -41,7 +41,7 @@
 }
 
 .app-shell.nav-collapsed {
-  --nav-width: 64px;
+  --nav-width: 56px;
 }
 
 .app-main {
@@ -160,19 +160,46 @@
   color: #eaf6f6;
   display: flex;
   flex-direction: column;
-  overflow: hidden;
+  position: relative;
+  min-width: 0;
+}
+
+/* Floating handle that sits right on the seam between the sidebar and the
+   main view. Half of it overlaps onto the main content so clicking it
+   reads as "grab this and push the panel in" / "pull it back out" rather
+   than a button buried inside the nav itself. */
+.app-nav-toggle {
+  position: absolute;
+  top: 16px;
+  right: -12px;
+  width: 24px;
+  height: 24px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--current-deep);
+  border: 2px solid var(--bg);
+  color: #eaf6f6;
+  border-radius: 50%;
+  font-size: 13px;
+  line-height: 1;
+  padding: 0;
+  box-shadow: 0 1px 4px rgba(15, 41, 44, 0.3);
+  z-index: 5;
+}
+
+.app-nav-toggle:hover {
+  background: var(--current);
+  color: #fff;
 }
 
 .app-nav-header {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  padding: 16px 12px 8px 20px;
+  padding: 16px 20px 8px;
+  min-height: 10px;
 }
 
 .app-nav.collapsed .app-nav-header {
   padding: 16px 10px 8px;
-  justify-content: center;
 }
 
 .app-nav-brand {
@@ -182,33 +209,17 @@
   white-space: nowrap;
 }
 
-.app-nav-collapse-btn {
-  background: rgba(255, 255, 255, 0.08);
-  border: none;
-  color: #cfe7e7;
-  width: 26px;
-  height: 26px;
-  border-radius: 8px;
-  font-size: 13px;
-  line-height: 1;
-  flex-shrink: 0;
-}
-
-.app-nav-collapse-btn:hover {
-  background: rgba(255, 255, 255, 0.16);
-  color: #fff;
-}
-
 .app-nav-list {
   display: flex;
   flex-direction: column;
   gap: 2px;
   padding: 12px 12px;
   flex: 1;
+  min-width: 0;
 }
 
 .app-nav.collapsed .app-nav-list {
-  padding: 12px 10px;
+  padding: 12px 6px;
 }
 
 .app-nav-item {
@@ -228,7 +239,7 @@
 
 .app-nav.collapsed .app-nav-item {
   justify-content: center;
-  padding: 10px;
+  padding: 10px 0;
 }
 
 .app-nav-item:hover {
@@ -252,7 +263,7 @@
 }
 
 .app-nav.collapsed .app-nav-footer {
-  padding: 14px 8px;
+  padding: 14px 6px;
   display: flex;
   flex-direction: column;
   align-items: center;
