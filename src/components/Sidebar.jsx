@@ -9,20 +9,24 @@ const NAV_ITEMS = [
 
 // Left-hand app nav, always visible. Switches which main view is shown,
 // carries the signed-in user's identity + sign-out control, and can be
-// collapsed down to just icons to give the main view more room.
+// collapsed down to just icons to give the main view more room. The
+// collapse/expand handle floats on the seam between the nav and the main
+// view (top-right edge of the sidebar), like a drawer being pushed in or
+// pulled back out.
 export default function Sidebar({ profile, view, onChangeView, collapsed, onToggleCollapsed }) {
   return (
     <div className={'app-nav' + (collapsed ? ' collapsed' : '')}>
+      <button
+        className="app-nav-toggle"
+        onClick={onToggleCollapsed}
+        aria-label={collapsed ? 'Expand menu' : 'Collapse menu'}
+        title={collapsed ? 'Expand menu' : 'Collapse menu'}
+      >
+        {collapsed ? '›' : '‹'}
+      </button>
+
       <div className="app-nav-header">
         {!collapsed && <div className="app-nav-brand">Flowify</div>}
-        <button
-          className="app-nav-collapse-btn"
-          onClick={onToggleCollapsed}
-          aria-label={collapsed ? 'Expand menu' : 'Collapse menu'}
-          title={collapsed ? 'Expand menu' : 'Collapse menu'}
-        >
-          {collapsed ? '»' : '«'}
-        </button>
       </div>
 
       <nav className="app-nav-list">
