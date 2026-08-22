@@ -26,6 +26,10 @@
   --danger: #b3413c;
   --success: #2f8f5b;
 
+  --connect: #b3791f; /* amber — connective layer (Today, focus, calendar) */
+  --connect-soft: #faf1de;
+  --connect-deep: #7a4f10;
+
   --card-alpha: 0.72;
 }
 
@@ -98,6 +102,10 @@
 
   --danger: #e2665f;
   --success: #4cbd85;
+
+  --connect: #d9a441;
+  --connect-soft: #3a2f14;
+  --connect-deep: #f0c878;
 
   --card-alpha: 0.85;
 }
@@ -468,8 +476,77 @@
 
 .today-grid {
   display: grid;
-  grid-template-columns: 1fr 1fr;
+  grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+  gap: 18px;
+}
+
+.today-top {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-end;
   gap: 20px;
+  flex-wrap: wrap;
+  margin-bottom: 20px;
+}
+
+.today-top h1 {
+  margin: 0 0 4px;
+}
+
+.today-top .view-subtitle {
+  margin: 0;
+}
+
+.quote-chip {
+  font-size: 13px;
+  font-style: italic;
+  color: var(--ink-2);
+  background: rgba(var(--surface-rgb), var(--card-alpha));
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+  border: 1px solid var(--border);
+  padding: 10px 16px;
+  border-radius: 999px;
+  max-width: 340px;
+  text-align: right;
+}
+
+.card-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 12px;
+  gap: 10px;
+}
+
+.card-head h3 {
+  margin: 0;
+  font-size: 15px;
+  color: var(--ink);
+}
+
+.layer-tag {
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  padding: 3px 9px;
+  border-radius: 999px;
+  background: var(--current-soft);
+  color: var(--current-deep);
+  flex-shrink: 0;
+  white-space: nowrap;
+}
+
+.card-accent-personal {
+  border-left: 4px solid var(--current);
+}
+
+.card-accent-shared {
+  border-left: 4px solid var(--sync);
+}
+
+.card-accent-connect {
+  border-left: 4px solid var(--connect);
 }
 
 .card {
@@ -696,6 +773,272 @@
   padding: 3px 8px;
   border-radius: 20px;
   white-space: nowrap;
+}
+
+/* ---------- Mood (Journal + Today) ---------- */
+
+.mood-bars {
+  display: flex;
+  align-items: flex-end;
+  gap: 8px;
+  height: 90px;
+  margin-top: 8px;
+}
+
+.mood-bar-col {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  flex: 1;
+}
+
+.mood-bar {
+  width: 100%;
+  max-width: 22px;
+  border-radius: 6px 6px 0 0;
+  background: var(--current);
+  opacity: 0.8;
+  transition: height 0.2s ease;
+}
+
+.mood-bar-col span {
+  font-size: 10px;
+  color: var(--ink-muted);
+}
+
+.mood-picker {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 14px;
+  flex-wrap: wrap;
+}
+
+.mood-option {
+  padding: 8px 14px;
+  border-radius: 999px;
+  border: 1px solid var(--border);
+  background: none;
+  font-size: 13px;
+  color: var(--ink-2);
+}
+
+.mood-option.active {
+  background: var(--current);
+  color: #fff;
+  border-color: var(--current);
+}
+
+.mood-tag {
+  display: inline-block;
+  font-size: 11px;
+  font-weight: 600;
+  padding: 3px 10px;
+  border-radius: 999px;
+  margin-bottom: 8px;
+}
+
+.mood-tag.mood-rough,
+.mood-tag.mood-low {
+  background: rgba(179, 65, 60, 0.14);
+  color: var(--danger);
+}
+
+.mood-tag.mood-okay {
+  background: var(--surface-2);
+  color: var(--ink-muted);
+}
+
+.mood-tag.mood-good,
+.mood-tag.mood-great {
+  background: var(--current-soft);
+  color: var(--current-deep);
+}
+
+/* ---------- Journal ---------- */
+
+.journal-textarea {
+  width: 100%;
+  padding: 12px;
+  border-radius: 10px;
+  border: 1px solid var(--border);
+  font-size: 14px;
+  font-family: inherit;
+  color: var(--ink);
+  background: var(--surface);
+  resize: vertical;
+  margin-bottom: 12px;
+}
+
+.journal-snippet {
+  font-size: 13px;
+  color: var(--ink-2);
+  line-height: 1.6;
+  margin: 4px 0 12px;
+}
+
+.journal-history {
+  margin-top: 24px;
+  max-width: 640px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.journal-entry-card {
+  padding: 16px;
+}
+
+.journal-entry-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 4px;
+}
+
+.journal-entry-date {
+  font-size: 12px;
+  color: var(--ink-muted);
+  font-weight: 600;
+}
+
+/* ---------- Focus ---------- */
+
+.focus-hero {
+  border-radius: 20px;
+  padding: 48px 32px;
+  margin-bottom: 24px;
+  max-width: 640px;
+  text-align: center;
+  background: linear-gradient(135deg, var(--current-soft), var(--sync-soft));
+  border: 1px solid var(--border);
+}
+
+.focus-quote {
+  font-size: 14px;
+  font-style: italic;
+  color: var(--ink-2);
+  max-width: 420px;
+  margin: 0 auto 24px;
+}
+
+.focus-timer {
+  font-size: 56px;
+  font-weight: 700;
+  color: var(--current-deep);
+  letter-spacing: 0.02em;
+  margin-bottom: 18px;
+  font-variant-numeric: tabular-nums;
+}
+
+.focus-duration-row {
+  display: flex;
+  justify-content: center;
+  gap: 8px;
+  margin-bottom: 16px;
+}
+
+.focus-duration-btn {
+  padding: 7px 14px;
+  border-radius: 999px;
+  border: 1px solid var(--border);
+  background: var(--surface);
+  color: var(--ink-2);
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.focus-duration-btn.active {
+  background: var(--current);
+  color: #fff;
+  border-color: var(--current);
+}
+
+.focus-duration-btn:disabled {
+  opacity: 0.6;
+}
+
+.focus-task-select {
+  display: block;
+  margin: 0 auto 16px;
+  padding: 8px 12px;
+  border-radius: 8px;
+  border: 1px solid var(--border);
+  font-size: 13px;
+  max-width: 280px;
+  width: 100%;
+}
+
+.focus-controls {
+  display: flex;
+  justify-content: center;
+  gap: 10px;
+}
+
+.focus-btn {
+  display: inline-block;
+  font-size: 13px;
+  font-weight: 600;
+  background: var(--current);
+  color: #fff;
+  padding: 10px 20px;
+  border-radius: 10px;
+  border: none;
+}
+
+.focus-btn.secondary {
+  background: none;
+  color: var(--ink-2);
+  border: 1px solid var(--border);
+}
+
+.focus-btn:disabled {
+  opacity: 0.5;
+}
+
+.focus-logged {
+  margin-top: 14px;
+  font-size: 13px;
+  color: var(--success);
+  font-weight: 600;
+}
+
+.focus-number {
+  font-size: 28px;
+  font-weight: 700;
+  color: var(--current-deep);
+}
+
+.focus-sub {
+  font-size: 12px;
+  color: var(--ink-muted);
+  margin: 4px 0 14px;
+}
+
+.focus-stats-row {
+  display: flex;
+  gap: 24px;
+}
+
+.focus-stat-num {
+  font-size: 22px;
+  font-weight: 700;
+  color: var(--current-deep);
+}
+
+.focus-stat-label {
+  font-size: 11px;
+  color: var(--ink-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.subtle-btn {
+  border: none;
+  background: none;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--current-deep);
 }
 
 /* ---------- Goals ---------- */
