@@ -4,7 +4,9 @@ import Auth from './components/Auth'
 import ProfileSetup from './components/ProfileSetup'
 import Sidebar from './components/Sidebar'
 import Today from './components/Today'
+import Focus from './components/Focus'
 import Habits from './components/Habits'
+import Journal from './components/Journal'
 import Tasks from './components/Tasks'
 import Goals from './components/Goals'
 import MessagesPanel from './components/MessagesPanel'
@@ -141,8 +143,10 @@ export default function App() {
         onChangeTheme={changeTheme}
       />
       <div className="app-main">
-        {view === 'today' && <Today profile={profile} />}
+        {view === 'today' && <Today profile={profile} onNavigate={setView} />}
+        {view === 'focus' && <Focus profile={profile} />}
         {view === 'habits' && <Habits profile={profile} />}
+        {view === 'journal' && <Journal profile={profile} />}
         {view === 'tasks' && <Tasks profile={profile} />}
         {view === 'goals' && <Goals profile={profile} />}
         {view === 'messages' && <MessagesPanel profile={profile} />}
