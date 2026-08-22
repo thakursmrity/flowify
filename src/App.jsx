@@ -4,7 +4,8 @@ import Auth from './components/Auth'
 import ProfileSetup from './components/ProfileSetup'
 import Sidebar from './components/Sidebar'
 import Today from './components/Today'
-import TasksHabits from './components/TasksHabits'
+import Habits from './components/Habits'
+import Tasks from './components/Tasks'
 import Goals from './components/Goals'
 import MessagesPanel from './components/MessagesPanel'
 import './App.css'
@@ -20,6 +21,13 @@ export default function App() {
       return false
     }
   })
+  const [theme, setTheme] = useState(() => {
+    try {
+      return localStorage.getItem('flowify-theme') || 'ocean'
+    } catch {
+      return 'ocean'
+    }
+  })
 
   function toggleNavCollapsed() {
     setNavCollapsed((prev) => {
@@ -31,6 +39,26 @@ export default function App() {
       }
       return next
     })
+  }
+
+  // Applies the active theme to the whole document (every CSS custom
+  // property the theme touches lives under `:root[data-theme="..."]`, see
+  // App.css), so this one line is what actually re-skins the app.
+  useEffect(() => {
+    document.documentElement.setAttribute('data-theme', theme)
+  }, [theme])
+
+  async function changeTheme(next) {
+    setTheme(next)
+    try {
+      localStorage.setItem('flowify-theme', next)
+    } catch {
+      // Private browsing / storage disabled — theme still applies for this session.
+    }
+    if (profile) {
+      setProfile((prev) => (prev ? { ...prev, theme: next } : prev))
+      await supabase.from('profiles').update({ theme: next }).eq('id', profile.id)
+    }
   }
 
   // Watch auth state: check for an existing session on load, then keep
@@ -50,7 +78,8 @@ export default function App() {
 
   // Once we know who's signed in, look up (or notice the absence of) their
   // profile row — that's what tells us whether to show the "pick a display
-  // name" screen.
+  // name" screen. Their saved theme preference (if any) takes over from
+  // whatever we guessed from localStorage as soon as it's known.
   useEffect(() => {
     if (!session) return
 
@@ -58,7 +87,7 @@ export default function App() {
     async function loadProfile() {
       const { data, error } = await supabase
         .from('profiles')
-        .select('id, flow_id, display_name')
+        .select('id, flow_id, display_name, theme')
         .eq('id', session.user.id)
         .maybeSingle()
 
@@ -68,6 +97,14 @@ export default function App() {
         setProfile(null)
       } else {
         setProfile(data ?? null)
+        if (data?.theme) {
+          setTheme(data.theme)
+          try {
+            localStorage.setItem('flowify-theme', data.theme)
+          } catch {
+            // Private browsing / storage disabled.
+          }
+        }
       }
     }
     loadProfile()
@@ -100,10 +137,13 @@ export default function App() {
         onChangeView={setView}
         collapsed={navCollapsed}
         onToggleCollapsed={toggleNavCollapsed}
+        theme={theme}
+        onChangeTheme={changeTheme}
       />
       <div className="app-main">
         {view === 'today' && <Today profile={profile} />}
-        {view === 'tasks' && <TasksHabits profile={profile} />}
+        {view === 'habits' && <Habits profile={profile} />}
+        {view === 'tasks' && <Tasks profile={profile} />}
         {view === 'goals' && <Goals profile={profile} />}
         {view === 'messages' && <MessagesPanel profile={profile} />}
       </div>
