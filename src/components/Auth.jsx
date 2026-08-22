@@ -35,7 +35,7 @@ export default function Auth() {
   return (
     <div className="auth-screen">
       <div className="auth-card">
-        <h1>Tend Chat</h1>
+        <h1>Flowify</h1>
         <p className="auth-subtitle">
           {mode === 'login' ? 'Log in to your account' : 'Create an account'}
         </p>

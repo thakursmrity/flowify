@@ -2,14 +2,17 @@ import { useEffect, useState } from 'react'
 import { supabase } from './supabaseClient'
 import Auth from './components/Auth'
 import ProfileSetup from './components/ProfileSetup'
-import ContactList from './components/ContactList'
-import ChatWindow from './components/ChatWindow'
+import Sidebar from './components/Sidebar'
+import Today from './components/Today'
+import TasksHabits from './components/TasksHabits'
+import Goals from './components/Goals'
+import MessagesPanel from './components/MessagesPanel'
 import './App.css'
 
 export default function App() {
   const [session, setSession] = useState(undefined) // undefined = still checking, null = signed out
   const [profile, setProfile] = useState(undefined) // undefined = still checking, null = no profile yet
-  const [activeContact, setActiveContact] = useState(null)
+  const [view, setView] = useState('today')
 
   // Watch auth state: check for an existing session on load, then keep
   // listening for sign in / sign out events.
@@ -20,7 +23,6 @@ export default function App() {
       setSession(newSession)
       if (!newSession) {
         setProfile(null)
-        setActiveContact(null)
       }
     })
 
@@ -37,7 +39,7 @@ export default function App() {
     async function loadProfile() {
       const { data, error } = await supabase
         .from('profiles')
-        .select('id, tend_id, display_name')
+        .select('id, flow_id, display_name')
         .eq('id', session.user.id)
         .maybeSingle()
 
@@ -73,13 +75,13 @@ export default function App() {
 
   return (
     <div className="app-shell">
-      <ContactList
-        profile={profile}
-        activeContact={activeContact}
-        onSelectContact={setActiveContact}
-        onSignOut={() => supabase.auth.signOut()}
-      />
-      <ChatWindow profile={profile} contact={activeContact} />
+      <Sidebar profile={profile} view={view} onChangeView={setView} />
+      <div className="app-main">
+        {view === 'today' && <Today profile={profile} />}
+        {view === 'tasks' && <TasksHabits profile={profile} />}
+        {view === 'goals' && <Goals profile={profile} />}
+        {view === 'messages' && <MessagesPanel profile={profile} />}
+      </div>
     </div>
   )
 }
