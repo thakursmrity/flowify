@@ -7,12 +7,23 @@ const NAV_ITEMS = [
   { key: 'messages', label: 'Current & Sync', icon: '∿' },
 ]
 
-// Left-hand app nav, always visible. Switches which main view is shown and
-// carries the signed-in user's identity + sign-out control.
-export default function Sidebar({ profile, view, onChangeView }) {
+// Left-hand app nav, always visible. Switches which main view is shown,
+// carries the signed-in user's identity + sign-out control, and can be
+// collapsed down to just icons to give the main view more room.
+export default function Sidebar({ profile, view, onChangeView, collapsed, onToggleCollapsed }) {
   return (
-    <div className="app-nav">
-      <div className="app-nav-brand">Flowify</div>
+    <div className={'app-nav' + (collapsed ? ' collapsed' : '')}>
+      <div className="app-nav-header">
+        {!collapsed && <div className="app-nav-brand">Flowify</div>}
+        <button
+          className="app-nav-collapse-btn"
+          onClick={onToggleCollapsed}
+          aria-label={collapsed ? 'Expand menu' : 'Collapse menu'}
+          title={collapsed ? 'Expand menu' : 'Collapse menu'}
+        >
+          {collapsed ? '»' : '«'}
+        </button>
+      </div>
 
       <nav className="app-nav-list">
         {NAV_ITEMS.map((item) => (
@@ -20,25 +31,34 @@ export default function Sidebar({ profile, view, onChangeView }) {
             key={item.key}
             className={'app-nav-item' + (view === item.key ? ' active' : '')}
             onClick={() => onChangeView(item.key)}
+            title={collapsed ? item.label : undefined}
           >
             <span className="app-nav-icon" aria-hidden="true">
               {item.icon}
             </span>
-            {item.label}
+            {!collapsed && item.label}
           </button>
         ))}
       </nav>
 
       <div className="app-nav-footer">
         <div className="app-nav-user">
-          <div className="avatar">{profile.display_name.charAt(0).toUpperCase()}</div>
-          <div>
-            <div className="app-nav-name">{profile.display_name}</div>
-            <div className="app-nav-id">{profile.flow_id}</div>
+          <div className="avatar" title={collapsed ? profile.display_name : undefined}>
+            {profile.display_name.charAt(0).toUpperCase()}
           </div>
+          {!collapsed && (
+            <div>
+              <div className="app-nav-name">{profile.display_name}</div>
+              <div className="app-nav-id">{profile.flow_id}</div>
+            </div>
+          )}
         </div>
-        <button className="link-button" onClick={() => supabase.auth.signOut()}>
-          Sign out
+        <button
+          className="link-button"
+          onClick={() => supabase.auth.signOut()}
+          title={collapsed ? 'Sign out' : undefined}
+        >
+          {collapsed ? '⏻' : 'Sign out'}
         </button>
       </div>
     </div>
