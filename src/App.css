@@ -8,6 +8,7 @@
 :root {
   --bg: #eef6f7;
   --surface: #ffffff;
+  --surface-rgb: 255, 255, 255;
   --surface-2: #f4fafb;
   --ink: #16292c;
   --ink-2: #35494c;
@@ -24,6 +25,81 @@
 
   --danger: #b3413c;
   --success: #2f8f5b;
+
+  --card-alpha: 0.72;
+}
+
+/* ---------- Theme variants ----------
+   Same token names throughout, so every component re-skins automatically,
+   nothing below this block needs to know which theme is active. Switched
+   via a `data-theme` attribute on <html>, set from Profile > Theme. */
+
+:root[data-theme='forest'] {
+  --bg: #f3f5ed;
+  --surface: #ffffff;
+  --surface-rgb: 255, 255, 255;
+  --surface-2: #eef2e4;
+  --ink: #1f2a17;
+  --ink-2: #37452a;
+  --ink-muted: #74805f;
+  --border: #dbe3cc;
+
+  --current: #4c7a3f;
+  --current-soft: #e4efdc;
+  --current-deep: #2c4a22;
+
+  --sync: #8a6a2e;
+  --sync-soft: #f3ecd9;
+  --sync-deep: #5c4720;
+
+  --danger: #b3413c;
+  --success: #3f8f52;
+}
+
+:root[data-theme='sky'] {
+  --bg: #eef6fc;
+  --surface: #ffffff;
+  --surface-rgb: 255, 255, 255;
+  --surface-2: #f2f8fd;
+  --ink: #142433;
+  --ink-2: #33495c;
+  --ink-muted: #6f89a0;
+  --border: #d5e6f2;
+
+  --current: #2f8fd0;
+  --current-soft: #e2f1fb;
+  --current-deep: #1c5c8a;
+
+  --sync: #6a5acd;
+  --sync-soft: #ece9fb;
+  --sync-deep: #453a86;
+
+  --danger: #c0453c;
+  --success: #2f8f6b;
+}
+
+:root[data-theme='dark'] {
+  --bg: #0d1615;
+  --surface: #142322;
+  --surface-rgb: 20, 35, 34;
+  --surface-2: #1a2b29;
+  --ink: #eaf3f1;
+  --ink-2: #c3d6d3;
+  --ink-muted: #7fa19c;
+  --border: #263a37;
+
+  --current: #35b0ac;
+  --current-soft: #1c3d3a;
+  --current-deep: #0b201e;
+
+  --sync: #6a93e0;
+  --sync-soft: #1d2b46;
+  --sync-deep: #14203a;
+
+  --danger: #e2665f;
+  --success: #4cbd85;
+
+  --card-alpha: 0.85;
 }
 
 /* ---------- Layout ---------- */
@@ -235,6 +311,7 @@
   font-size: 14px;
   white-space: nowrap;
   overflow: hidden;
+  transition: background 0.15s ease, transform 0.15s ease, color 0.15s ease;
 }
 
 .app-nav.collapsed .app-nav-item {
@@ -242,8 +319,13 @@
   padding: 10px 0;
 }
 
-.app-nav-item:hover {
+.app-nav-item:not(.soon):hover {
   background: rgba(255, 255, 255, 0.08);
+  transform: translateX(3px);
+}
+
+.app-nav.collapsed .app-nav-item:not(.soon):hover {
+  transform: scale(1.06);
 }
 
 .app-nav-item.active {
@@ -252,9 +334,69 @@
   font-weight: 600;
 }
 
+.app-nav-item.soon {
+  color: #6f9491;
+  cursor: not-allowed;
+}
+
+.app-nav-item-label {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  overflow: hidden;
+}
+
+.soon-tag {
+  font-size: 9px;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  padding: 1px 6px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.14);
+  color: #cfe7e7;
+  flex-shrink: 0;
+}
+
 .app-nav-icon {
   width: 18px;
   text-align: center;
+}
+
+/* ---------- Theme picker (sidebar footer) ---------- */
+
+.app-nav-theme {
+  padding: 4px 12px 14px;
+}
+
+.app-nav-theme-label {
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: #7fa7a6;
+  margin-bottom: 8px;
+}
+
+.app-nav-theme-row {
+  display: flex;
+  gap: 8px;
+}
+
+.theme-swatch {
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  border: 2px solid rgba(255, 255, 255, 0.25);
+  padding: 0;
+  cursor: pointer;
+  transition: transform 0.15s ease, border-color 0.15s ease;
+}
+
+.theme-swatch:hover {
+  transform: scale(1.15);
+}
+
+.theme-swatch.active {
+  border-color: #ffffff;
 }
 
 .app-nav-footer {
@@ -331,10 +473,28 @@
 }
 
 .card {
-  background: var(--surface);
+  background: rgba(var(--surface-rgb), var(--card-alpha));
+  backdrop-filter: blur(14px);
+  -webkit-backdrop-filter: blur(14px);
   border: 1px solid var(--border);
   border-radius: 16px;
   padding: 20px;
+  transition: transform 0.18s ease, box-shadow 0.18s ease;
+}
+
+.card:hover {
+  transform: translateY(-3px);
+  box-shadow: 0 10px 28px rgba(15, 41, 44, 0.12);
+}
+
+@supports not (backdrop-filter: blur(1px)) {
+  .card {
+    background: var(--surface);
+  }
+}
+
+.card-wide {
+  max-width: 640px;
 }
 
 .card-header {
