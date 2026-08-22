@@ -2,9 +2,9 @@ import { supabase } from '../supabaseClient'
 
 const NAV_ITEMS = [
   { key: 'today', label: 'Today', icon: '☀' },
-  { key: 'focus', label: 'Focus', icon: '◐', soon: true },
+  { key: 'focus', label: 'Focus', icon: '◐' },
   { key: 'habits', label: 'Habits', icon: '↻' },
-  { key: 'journal', label: 'Journal', icon: '✎', soon: true },
+  { key: 'journal', label: 'Journal', icon: '✎' },
   { key: 'tasks', label: 'Tasks', icon: '✓' },
   { key: 'goals', label: 'Goals', icon: '◎' },
   { key: 'messages', label: 'Messages', icon: '∿' },
