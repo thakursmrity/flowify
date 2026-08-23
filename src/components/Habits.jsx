@@ -285,28 +285,42 @@ export default function Habits({ profile }) {
                     ))}
 
                     {openShareId === h.id ? (
-                      <span className="share-panel">
-                        <select value={shareChoice} onChange={(e) => setShareChoice(e.target.value)}>
-                          <option value="">Choose from your circle...</option>
-                          {availableContacts.map((c) => (
-                            <option key={c.id} value={c.id}>
-                              {c.display_name}
-                            </option>
-                          ))}
-                        </select>
-                        <button className="share-confirm" disabled={!shareChoice} onClick={() => confirmShare(h.id)}>
-                          Add
-                        </button>
-                        <button className="share-cancel" onClick={() => toggleSharePanel(h.id)}>
-                          Cancel
-                        </button>
-                      </span>
-                    ) : (
-                      availableContacts.length > 0 && (
-                        <button className="share-btn" onClick={() => toggleSharePanel(h.id)}>
-                          + Share
-                        </button>
+                      availableContacts.length > 0 ? (
+                        <span className="share-panel">
+                          <select value={shareChoice} onChange={(e) => setShareChoice(e.target.value)}>
+                            <option value="">Choose from your circle...</option>
+                            {availableContacts.map((c) => (
+                              <option key={c.id} value={c.id}>
+                                {c.display_name}
+                              </option>
+                            ))}
+                          </select>
+                          <button
+                            className="share-confirm"
+                            disabled={!shareChoice}
+                            onClick={() => confirmShare(h.id)}
+                          >
+                            Add
+                          </button>
+                          <button className="share-cancel" onClick={() => toggleSharePanel(h.id)}>
+                            Cancel
+                          </button>
+                        </span>
+                      ) : (
+                        <span className="share-panel">
+                          <span className="empty-hint small">
+                            Everyone in your circle is already watching this, or your circle is empty. Add
+                            someone from Messages first.
+                          </span>
+                          <button className="share-cancel" onClick={() => toggleSharePanel(h.id)}>
+                            Close
+                          </button>
+                        </span>
                       )
+                    ) : (
+                      <button className="share-btn" onClick={() => toggleSharePanel(h.id)}>
+                        + Share
+                      </button>
                     )}
                   </div>
                 </li>
