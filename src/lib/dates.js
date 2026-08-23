@@ -26,3 +26,38 @@ export function computeStreak(logDates, today) {
   }
   return streak
 }
+
+// Longest run of consecutive logged days ever, not just the one ending
+// today/yesterday. Used for the "best streak" stat next to the live one.
+export function bestStreak(logDates) {
+  const sorted = [...(logDates instanceof Set ? logDates : new Set(logDates))].sort()
+  let best = 0
+  let run = 0
+  let prev = null
+  for (const d of sorted) {
+    run = prev && addDays(prev, 1) === d ? run + 1 : 1
+    best = Math.max(best, run)
+    prev = d
+  }
+  return best
+}
+
+// Calendar-month grid as a flat array of ISO date strings (or null for the
+// leading/trailing blanks), always a multiple of 7 long so it renders as
+// whole weeks. Shared by anything that draws a real month calendar (Tasks,
+// Habits) instead of an abstract heatmap.
+export function monthCells(year, month) {
+  const startWeekday = new Date(year, month, 1).getDay()
+  const daysInMonth = new Date(year, month + 1, 0).getDate()
+  const cells = []
+  for (let i = 0; i < startWeekday; i += 1) cells.push(null)
+  for (let d = 1; d <= daysInMonth; d += 1) {
+    cells.push(`${year}-${String(month + 1).padStart(2, '0')}-${String(d).padStart(2, '0')}`)
+  }
+  while (cells.length % 7 !== 0) cells.push(null)
+  return cells
+}
+
+export function monthLabel(year, month) {
+  return new Date(year, month, 1).toLocaleDateString(undefined, { month: 'long', year: 'numeric' })
+}
