@@ -2008,6 +2008,7 @@
   padding: 4px;
   border-radius: 999px;
   gap: 2px;
+  flex-shrink: 0;
 }
 
 .seg button {
@@ -2056,6 +2057,138 @@
   background: var(--ink);
   border-color: var(--ink);
   color: var(--bg);
+}
+
+/* ---------- Round 6: rotating motivation quote beside the tabs ---------- */
+
+.quote-banner {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  background: linear-gradient(120deg, var(--current-soft), var(--sync-soft));
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  padding: 8px 8px 8px 20px;
+}
+
+.quote-text {
+  font-family: 'Fraunces', Georgia, serif;
+  font-style: italic;
+  font-size: 13px;
+  color: var(--current-deep);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.quote-refresh {
+  flex-shrink: 0;
+  width: 30px;
+  height: 30px;
+  border-radius: 50%;
+  border: none;
+  background: var(--surface);
+  box-shadow: var(--shadow-sm);
+  font-size: 14px;
+  cursor: pointer;
+  color: var(--ink-2);
+}
+
+.quote-refresh:hover {
+  transform: rotate(75deg);
+  transition: transform 0.3s ease;
+}
+
+/* ---------- Round 6: category filter, moved into a closed dropdown ---------- */
+
+.mine-toolbar {
+  display: flex;
+  justify-content: flex-end;
+  margin-bottom: 14px;
+}
+
+.cat-dropdown {
+  position: relative;
+}
+
+.cat-dropdown-btn {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  border: 1px solid var(--border);
+  background: var(--surface);
+  padding: 9px 16px;
+  border-radius: 999px;
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--ink-2);
+  cursor: pointer;
+}
+
+.cat-dropdown-btn .dd-dot {
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
+.cat-dropdown-btn .dd-arrow {
+  color: var(--ink-muted);
+  font-size: 11px;
+}
+
+.cat-dropdown-menu {
+  position: absolute;
+  top: calc(100% + 8px);
+  right: 0;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 16px;
+  box-shadow: var(--shadow-md);
+  padding: 8px;
+  min-width: 200px;
+  z-index: 30;
+}
+
+.cat-dropdown-item {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  padding: 9px 12px;
+  border-radius: 10px;
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--ink-2);
+  cursor: pointer;
+}
+
+.cat-dropdown-item:hover {
+  background: var(--surface-2);
+}
+
+.cat-dropdown-item.active {
+  background: var(--ink);
+  color: var(--bg);
+}
+
+.cat-dropdown-item .dot {
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
+.cat-dropdown-sep {
+  height: 1px;
+  background: var(--border);
+  margin: 6px 4px;
+}
+
+.cat-dropdown-add {
+  color: var(--current-deep);
 }
 
 /* ---------- Bell ---------- */
@@ -2131,6 +2264,73 @@
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
   gap: 18px;
+}
+
+/* ---------- Round 6: "My habits" grouped into category sections ---------- */
+
+.cat-section {
+  margin-bottom: 26px;
+}
+
+.cat-section-head {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  margin-bottom: 12px;
+  cursor: grab;
+  width: fit-content;
+  padding: 4px 6px;
+  margin-left: -6px;
+  border-radius: 9px;
+}
+
+.cat-section-head:hover {
+  background: var(--surface-2);
+}
+
+.cat-section-head.dragging {
+  opacity: 0.4;
+}
+
+.cat-drag-handle {
+  font-size: 12px;
+  color: var(--ink-muted);
+  opacity: 0;
+  transition: opacity 0.12s ease;
+}
+
+.cat-section-head:hover .cat-drag-handle {
+  opacity: 0.6;
+}
+
+.cat-section-head .dot {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+}
+
+.cat-section-head h3 {
+  font-size: 13px;
+  font-weight: 800;
+  margin: 0;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--ink-2);
+}
+
+.cat-section-head .count {
+  font-size: 11.5px;
+  color: var(--ink-muted);
+  font-weight: 700;
+  background: var(--surface-2);
+  padding: 2px 9px;
+  border-radius: 999px;
+}
+
+.cat-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 14px;
 }
 
 .hcard {
@@ -2225,6 +2425,76 @@
   font-weight: 600;
 }
 
+/* ---------- Round 6: compact card used in the grouped "My habits" view ---------- */
+
+.drag-handle {
+  position: absolute;
+  top: 10px;
+  right: 10px;
+  font-size: 12px;
+  color: var(--ink-muted);
+  opacity: 0.55;
+  z-index: 2;
+  cursor: grab;
+}
+
+.hcard.short {
+  padding: 14px 16px 12px;
+  width: 252px;
+  flex: 0 0 252px;
+}
+
+.hcard.short .hcard-top {
+  margin-bottom: 8px;
+}
+
+.hcard.short .hcard-icon {
+  width: 32px;
+  height: 32px;
+  font-size: 15px;
+  border-radius: 11px;
+}
+
+.hcard.short .hcard-cat {
+  display: none;
+}
+
+.hcard.short .hcard-name {
+  font-size: 14px;
+  margin-bottom: 6px;
+  padding-right: 16px;
+}
+
+.hcard.short .paired-note {
+  margin-bottom: 6px;
+}
+
+.hcard.short .hcard-streak {
+  margin-bottom: 8px;
+  gap: 5px;
+}
+
+.hcard.short .hcard-streak .num {
+  font-size: 19px;
+}
+
+.hcard.short .hcard-streak .lbl {
+  font-size: 10.5px;
+}
+
+.hcard.short .mini-cal {
+  gap: 3px;
+}
+
+.hcard.short .mini-cal .cell {
+  font-size: 8px;
+  border-radius: 5px;
+}
+
+.hcard.short.dragging {
+  opacity: 0.4;
+}
+
 .hcard-foot {
   display: flex;
   align-items: center;
@@ -2310,6 +2580,22 @@
 .mini-cal .cell.today {
   outline: 2px solid var(--cat, var(--current));
   outline-offset: 1px;
+}
+
+/* Round 6: today's cell alone is clickable — mark done/undone right there
+   instead of opening the detail panel. Everything else in the calendar
+   stays a plain display square. */
+.mini-cal .cell.today.clickable,
+.full-cal .day.today.clickable {
+  cursor: pointer;
+}
+
+.mini-cal .cell.today.clickable:hover {
+  transform: scale(1.14);
+}
+
+.full-cal .day.today.clickable:hover {
+  transform: scale(1.06);
 }
 
 .full-cal {
@@ -2468,6 +2754,60 @@
 .nudge-banner.ahead {
   background: var(--later-bg);
   color: var(--later-ink);
+}
+
+/* ---------- Round 6: Shared tab filter by person ---------- */
+
+.shared-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 16px;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+.person-filters {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.person-filter-chip {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  border: 1px solid var(--border);
+  background: var(--surface);
+  padding: 6px 14px 6px 6px;
+  border-radius: 999px;
+  font-size: 12.5px;
+  font-weight: 700;
+  color: var(--ink-2);
+  cursor: pointer;
+}
+
+.person-filter-chip .pav {
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  background: var(--sync);
+  color: #fff;
+  font-size: 10px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: 800;
+}
+
+.person-filter-chip.active {
+  background: var(--ink);
+  border-color: var(--ink);
+  color: var(--bg);
+}
+
+.person-filter-chip.active .pav {
+  background: rgba(255, 255, 255, 0.25);
 }
 
 /* ---------- Supporting tab ---------- */
@@ -3087,7 +3427,7 @@
   display: flex;
   align-items: baseline;
   justify-content: space-between;
-  margin-bottom: 12px;
+  margin-bottom: 14px;
 }
 
 .overview-title {
@@ -3096,80 +3436,106 @@
   color: var(--ink);
 }
 
-.overview-sub {
-  font-size: 11.5px;
+.overview-month {
+  font-size: 12.5px;
+  font-weight: 700;
+  color: var(--current-deep);
+  background: var(--current-soft);
+  padding: 4px 12px;
+  border-radius: 999px;
+}
+
+/* Round 6: "This month at a glance" is a real date strip per habit — not a
+   percentage bar — and it stretches to fill the row instead of leaving a
+   gap after the last cell. Days still ahead of today read as a light
+   "coming up" fill rather than empty space. */
+
+.glance-scale {
+  display: grid;
+  grid-template-columns: repeat(var(--days, 31), 1fr);
+  gap: 3px;
+  padding-left: 222px;
+  padding-right: 62px;
+  margin-bottom: 6px;
+}
+
+.glance-scale span {
+  font-size: 8.5px;
   color: var(--ink-muted);
+  text-align: center;
 }
 
-.overview-rows {
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-}
-
-.overview-row {
+.glance-row {
   display: flex;
   align-items: center;
-  gap: 12px;
-  padding: 8px 6px;
-  border-radius: 12px;
-  cursor: pointer;
+  gap: 10px;
+  padding: 6px 0;
 }
 
-.overview-row:hover {
-  background: var(--surface-2);
+.glance-row.dragging {
+  opacity: 0.4;
 }
 
-.overview-icon {
-  width: 28px;
-  height: 28px;
-  border-radius: 9px;
+.glance-drag-handle {
+  width: 16px;
+  flex-shrink: 0;
+  text-align: center;
+  font-size: 13px;
+  color: var(--ink-muted);
+  opacity: 0;
+  cursor: grab;
+  transition: opacity 0.12s ease;
+}
+
+.glance-row:hover .glance-drag-handle {
+  opacity: 0.6;
+}
+
+.glance-icon {
+  width: 26px;
+  height: 26px;
+  border-radius: 8px;
   display: flex;
   align-items: center;
   justify-content: center;
-  font-size: 13px;
+  font-size: 12px;
   flex-shrink: 0;
 }
 
-.overview-name {
-  font-size: 13px;
+.glance-name {
+  width: 150px;
+  flex-shrink: 0;
+  font-size: 12.5px;
   font-weight: 700;
   color: var(--ink);
-  width: 160px;
-  flex-shrink: 0;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 
-.overview-bar-track {
+.glance-cells {
+  display: grid;
+  grid-template-columns: repeat(var(--days, 31), 1fr);
+  gap: 3px;
   flex: 1;
-  height: 8px;
-  border-radius: 999px;
+}
+
+.glance-cells .gc {
+  height: 16px;
+  border-radius: 4px;
   background: var(--surface-2);
-  overflow: hidden;
 }
 
-.overview-bar-fill {
-  height: 100%;
-  border-radius: 999px;
-  transition: width 0.3s ease;
+.glance-cells .gc.future {
+  background: var(--current-soft);
 }
 
-.overview-pct {
-  font-size: 12.5px;
-  font-weight: 800;
-  color: var(--ink-2);
-  width: 38px;
-  text-align: right;
+.glance-streak {
+  width: 52px;
   flex-shrink: 0;
-}
-
-.overview-streak {
   font-size: 11.5px;
   color: var(--ink-muted);
-  flex-shrink: 0;
-  width: 34px;
+  text-align: right;
 }
 
 /* ---------- Invites ---------- */
