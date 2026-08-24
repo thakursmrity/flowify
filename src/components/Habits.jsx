@@ -21,6 +21,22 @@ const FALLBACK_CAT = { label: 'Other', icon: '✦', color: 'var(--ink-muted)', s
 
 const PALETTE = ['#1f8a8c', '#2f5da8', '#b3791f', '#6a5acd', '#c0447a', '#3f8f52', '#a8433c', '#4a534e']
 
+// Default order the "My habits" category sections appear in, before a user
+// drags any of them into a different arrangement (round 6).
+const DEFAULT_CATEGORY_ORDER = ['personal', 'health', 'study', 'finance', 'mind']
+
+// Small rotating motivation line next to the tabs (round 6) — purely
+// decorative, no backend involved, resets to the first one on reload.
+const QUOTES = [
+  "Small steps, repeated daily, build unstoppable momentum.",
+  "You don't have to be extreme, just consistent.",
+  "Discipline is choosing what you want most over what you want now.",
+  "The chain is only as strong as today's link.",
+  "Progress, not perfection.",
+  "Show up. That's the whole game.",
+  "Streaks are just promises you kept to yourself.",
+]
+
 function initial(name) {
   return (name || '?').charAt(0).toUpperCase()
 }
@@ -57,7 +73,11 @@ function weeklyCounts(doneSet, today, weeksBack) {
 // One calendar renderer, three sizes: 'sm' on cards (current month, day
 // numbers), 'lg' in the detail panel (navigable, day numbers, weekday
 // row), 'dot' side-by-side in the Shared comparison (no numbers, just fill).
-function HabitCalendar({ doneSet, color, year, month, today, size = 'sm' }) {
+// Pass onToggleToday to make just today's cell clickable (round 6) — tapping
+// it marks the habit done/undone right there instead of opening the detail
+// panel; every other cell stays a plain display square. Callers that show
+// someone else's habit (Supporting) simply omit the prop, keeping it read-only.
+function HabitCalendar({ doneSet, color, year, month, today, size = 'sm', onToggleToday }) {
   const cells = monthCells(year, month)
 
   if (size === 'dot') {
@@ -91,11 +111,28 @@ function HabitCalendar({ doneSet, color, year, month, today, size = 'sm' }) {
         if (!c) return <span key={'b' + i} className={cellCls + ' blank'} />
         const on = doneSet.has(c)
         const isToday = c === today
+        const style = on ? { background: color, color: '#fff' } : isToday ? { outlineColor: color } : undefined
+        if (isToday && onToggleToday) {
+          return (
+            <span
+              key={c}
+              className={cellCls + (on ? ' on' : '') + ' today clickable'}
+              style={style}
+              title="Tap to mark today done or undone"
+              onClick={(e) => {
+                e.stopPropagation()
+                onToggleToday()
+              }}
+            >
+              {Number(c.slice(-2))}
+            </span>
+          )
+        }
         return (
           <span
             key={c}
             className={cellCls + (on ? ' on' : '') + (isToday ? ' today' : '')}
-            style={on ? { background: color, color: '#fff' } : isToday ? { outlineColor: color } : undefined}
+            style={style}
           >
             {Number(c.slice(-2))}
           </span>
@@ -113,6 +150,9 @@ export default function Habits({ profile }) {
 
   const [tab, setTab] = useState('mine') // 'mine' | 'shared' | 'supporting'
   const [categoryFilter, setCategoryFilter] = useState('all')
+  const [catFilterOpen, setCatFilterOpen] = useState(false)
+  const [categoryOrder, setCategoryOrder] = useState(DEFAULT_CATEGORY_ORDER)
+  const [quoteIdx, setQuoteIdx] = useState(0)
 
   const [habits, setHabits] = useState([])
   const [logsByHabit, setLogsByHabit] = useState({})
@@ -125,6 +165,7 @@ export default function Habits({ profile }) {
   const [incomingInvites, setIncomingInvites] = useState([])
   const [outgoingInvites, setOutgoingInvites] = useState([])
   const [loadingPairs, setLoadingPairs] = useState(true)
+  const [sharedPersonFilter, setSharedPersonFilter] = useState('all')
 
   const [supporting, setSupporting] = useState([])
   const [loadingSupporting, setLoadingSupporting] = useState(true)
@@ -172,9 +213,10 @@ export default function Habits({ profile }) {
     const [habitRes, logRes, shareRes, contactRes, catRes] = await Promise.all([
       supabase
         .from('habits')
-        .select('id, name, category, archived')
+        .select('id, name, category, archived, sort_order')
         .eq('user_id', profile.id)
         .eq('archived', false)
+        .order('sort_order', { ascending: true })
         .order('created_at', { ascending: true }),
       supabase.from('habit_logs').select('habit_id, log_date').eq('user_id', profile.id),
       supabase.from('habit_shares').select('id, habit_id, shared_with_id').eq('owner_id', profile.id),
@@ -351,11 +393,25 @@ export default function Habits({ profile }) {
     setNudges(data ?? [])
   }
 
+  // The order a user has dragged the category sections into (round 6).
+  // No row yet just means "use the default order" — nothing to migrate.
+  async function loadCategoryOrder() {
+    const { data } = await supabase
+      .from('habit_category_order')
+      .select('order_json')
+      .eq('user_id', profile.id)
+      .maybeSingle()
+    if (Array.isArray(data?.order_json) && data.order_json.length > 0) {
+      setCategoryOrder(data.order_json)
+    }
+  }
+
   useEffect(() => {
     loadMine()
     loadPairs()
     loadSupporting()
     loadNudges()
+    loadCategoryOrder()
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [profile.id])
 
@@ -382,6 +438,72 @@ export default function Habits({ profile }) {
     setHabits((prev) => prev.map((h) => (h.id === habitId ? { ...h, category: key } : h)))
     setEditingCatFor(null)
     await supabase.from('habits').update({ category: key }).eq('id', habitId)
+  }
+
+  // Category display order: the default five, then anything a user has
+  // dragged around (round 6), then any built-in or custom category not yet
+  // in that list (a brand-new custom category, for instance).
+  function catList() {
+    const known = new Set(categoryOrder)
+    const builtinsNotInOrder = Object.keys(BUILTIN_CATS).filter((c) => !known.has(c))
+    const customsNotInOrder = customCats.map((c) => c.key).filter((c) => !known.has(c))
+    return [...categoryOrder, ...builtinsNotInOrder, ...customsNotInOrder]
+  }
+
+  // Drag a habit card (or its "month at a glance" row) onto another one to
+  // reorder within a category — cards from two different categories don't
+  // reorder against each other, since which category a habit is in doesn't
+  // change here (round 6).
+  async function reorderHabit(draggedId, targetId) {
+    if (!draggedId || draggedId === targetId) return
+    const dragged = habits.find((h) => h.id === draggedId)
+    const target = habits.find((h) => h.id === targetId)
+    if (!dragged || !target || dragged.category !== target.category) return
+
+    const inCat = habits
+      .filter((h) => h.category === dragged.category)
+      .sort((a, b) => (a.sort_order ?? 0) - (b.sort_order ?? 0))
+    const fromIdx = inCat.findIndex((h) => h.id === draggedId)
+    const toIdx = inCat.findIndex((h) => h.id === targetId)
+    if (fromIdx < 0 || toIdx < 0) return
+    const reordered = [...inCat]
+    const [item] = reordered.splice(fromIdx, 1)
+    reordered.splice(toIdx, 0, item)
+
+    const updates = reordered.map((h, i) => ({ id: h.id, sort_order: i }))
+    setHabits((prev) =>
+      prev.map((h) => {
+        const u = updates.find((x) => x.id === h.id)
+        return u ? { ...h, sort_order: u.sort_order } : h
+      })
+    )
+    await Promise.all(updates.map((u) => supabase.from('habits').update({ sort_order: u.sort_order }).eq('id', u.id)))
+  }
+
+  // Drag a category section's header onto another's to reorder the sections
+  // themselves — separate from reordering habits within one (round 6).
+  async function reorderCategory(draggedCat, targetCat) {
+    if (!draggedCat || draggedCat === targetCat) return
+    const order = catList()
+    const fromIdx = order.indexOf(draggedCat)
+    const toIdx = order.indexOf(targetCat)
+    if (fromIdx < 0 || toIdx < 0) return
+    const next = [...order]
+    const [item] = next.splice(fromIdx, 1)
+    next.splice(toIdx, 0, item)
+    setCategoryOrder(next)
+    await supabase
+      .from('habit_category_order')
+      .upsert({ user_id: profile.id, order_json: next, updated_at: new Date().toISOString() })
+  }
+
+  function refreshQuote() {
+    setQuoteIdx((prev) => {
+      if (QUOTES.length <= 1) return prev
+      let next = prev
+      while (next === prev) next = Math.floor(Math.random() * QUOTES.length)
+      return next
+    })
   }
 
   async function confirmShare(habitId) {
@@ -483,9 +605,11 @@ export default function Habits({ profile }) {
         showToast(`Invite sent to ${partnerName} — it'll show as Shared once they accept`)
       }
     } else {
+      const inCat = habits.filter((h) => h.category === modalCategory)
+      const nextOrder = inCat.length ? Math.max(...inCat.map((h) => h.sort_order ?? 0)) + 1 : 0
       const { data, error } = await supabase
         .from('habits')
-        .insert({ user_id: profile.id, name, category: modalCategory })
+        .insert({ user_id: profile.id, name, category: modalCategory, sort_order: nextOrder })
         .select()
         .single()
       if (!error && data) {
@@ -566,22 +690,32 @@ export default function Habits({ profile }) {
   const pairedPartnerByHabit = {}
   for (const p of pairs) pairedPartnerByHabit[p.mine.id] = p.partner.name
 
-  const mineVisible = habits.filter((h) => categoryFilter === 'all' || h.category === categoryFilter)
   const activePerson = supporting.find((p) => p.ownerId === activePersonId) ?? supporting[0] ?? null
   const unseenCount = nudges.filter((n) => !n.seen).length + incomingInvites.length
 
   const monthPrefix = `${todayYear}-${String(todayMonthIdx + 1).padStart(2, '0')}`
+  const daysInMonth = new Date(todayYear, todayMonthIdx + 1, 0).getDate()
   const dayOfMonth = now.getDate()
-  const overviewRows = mineVisible
-    .map((h) => {
-      const cat = allCats[h.category] ?? FALLBACK_CAT
-      const doneSet = logsByHabit[h.id] ?? new Set()
-      const doneThisMonth = [...doneSet].filter((d) => d.startsWith(monthPrefix)).length
-      const percent = Math.min(100, Math.round((doneThisMonth / dayOfMonth) * 100))
-      const streak = computeStreak(doneSet, today)
-      return { habit: h, cat, percent, streak }
-    })
-    .sort((a, b) => b.percent - a.percent)
+
+  // Every habit, ordered the way the user has dragged them (round 6) — used
+  // both by "This month at a glance" (always shows everything, regardless
+  // of the category filter below) and by the categorized card sections.
+  // `habits` already arrives from Supabase ordered by sort_order then
+  // created_at, so a stable sort here just needs to key on sort_order —
+  // habits that still share the default 0 keep their created_at order.
+  const habitsSorted = [...habits].sort((a, b) => (a.sort_order ?? 0) - (b.sort_order ?? 0))
+
+  const glanceRows = habitsSorted.map((h) => {
+    const cat = allCats[h.category] ?? FALLBACK_CAT
+    const doneSet = logsByHabit[h.id] ?? new Set()
+    return { habit: h, cat, doneSet, streak: computeStreak(doneSet, today) }
+  })
+
+  const orderedCategories = catList().filter((c) => categoryFilter === 'all' || categoryFilter === c)
+  const categoriesWithHabits = catList().filter((c) => habits.some((h) => h.category === c))
+
+  const sharedPartners = [...new Set(pairs.map((p) => p.partner.name))]
+  const pairsVisible = pairs.filter((p) => sharedPersonFilter === 'all' || p.partner.name === sharedPersonFilter)
 
   return (
     <div className="view-page-wide habits-v2">
@@ -633,96 +767,191 @@ export default function Habits({ profile }) {
           </button>
           <button className={tab === 'supporting' ? 'active' : ''} onClick={() => setTab('supporting')}>Supporting</button>
         </div>
-        {tab === 'mine' && (
-          <div className="hx-filters">
-            <button className={'filter-chip' + (categoryFilter === 'all' ? ' active' : '')} onClick={() => setCategoryFilter('all')}>
-              <span className="dot" style={{ background: 'var(--ink)' }} />All
-            </button>
-            {Object.entries(allCats).map(([key, c]) => (
-              <button
-                key={key}
-                className={'filter-chip' + (categoryFilter === key ? ' active' : '')}
-                onClick={() => setCategoryFilter(key)}
-              >
-                <span className="dot" style={{ background: c.color }} />{c.label}
-              </button>
-            ))}
-            <button className="filter-chip filter-chip-add" onClick={() => setCatModalOpen(true)}>＋ Category</button>
-          </div>
-        )}
+        <div className="quote-banner">
+          <span className="quote-text">"{QUOTES[quoteIdx]}"</span>
+          <button className="quote-refresh" onClick={refreshQuote} title="New quote">↻</button>
+        </div>
       </div>
 
       {tab === 'mine' && (
         <>
-          {overviewRows.length > 0 && (
+          {glanceRows.length > 0 && (
             <div className="overview-card">
               <div className="overview-head">
                 <span className="overview-title">This month at a glance</span>
-                <span className="overview-sub">Tap a row to open it</span>
+                <span className="overview-month">{monthLabel(todayYear, todayMonthIdx)}</span>
               </div>
-              <div className="overview-rows">
-                {overviewRows.map((r) => (
-                  <div key={r.habit.id} className="overview-row" onClick={() => openMineDetail(r.habit)}>
-                    <span className="overview-icon" style={{ background: r.cat.soft, color: r.cat.color }}>{r.cat.icon}</span>
-                    <span className="overview-name">{r.habit.name}</span>
-                    <div className="overview-bar-track">
-                      <div className="overview-bar-fill" style={{ width: `${r.percent}%`, background: r.cat.color }} />
-                    </div>
-                    <span className="overview-pct">{r.percent}%</span>
-                    {r.streak > 0 && <span className="overview-streak">🔥{r.streak}</span>}
-                  </div>
+              <div className="glance-scale" style={{ '--days': daysInMonth }}>
+                {Array.from({ length: daysInMonth }, (_, i) => i + 1).map((d) => (
+                  <span key={d}>{d === 1 || d % 5 === 0 || d === daysInMonth ? d : ''}</span>
                 ))}
               </div>
+              {glanceRows.map((r) => (
+                <div
+                  key={r.habit.id}
+                  className="glance-row"
+                  draggable
+                  onDragStart={(e) => {
+                    e.dataTransfer.setData('text/plain', r.habit.id)
+                    e.currentTarget.classList.add('dragging')
+                  }}
+                  onDragEnd={(e) => e.currentTarget.classList.remove('dragging')}
+                  onDragOver={(e) => e.preventDefault()}
+                  onDrop={(e) => {
+                    e.preventDefault()
+                    reorderHabit(e.dataTransfer.getData('text/plain'), r.habit.id)
+                  }}
+                >
+                  <span className="glance-drag-handle" title="Drag to reorder">⠿</span>
+                  <span className="glance-icon" style={{ background: r.cat.soft, color: r.cat.color }}>{r.cat.icon}</span>
+                  <span className="glance-name">{r.habit.name}</span>
+                  <div className="glance-cells" style={{ '--days': daysInMonth }}>
+                    {Array.from({ length: daysInMonth }, (_, i) => {
+                      const d = i + 1
+                      const dateIso = `${monthPrefix}-${String(d).padStart(2, '0')}`
+                      const isFuture = d > dayOfMonth
+                      const on = r.doneSet.has(dateIso)
+                      const isToday = dateIso === today
+                      const cellStyle = {
+                        ...(on ? { background: r.cat.color } : {}),
+                        ...(isToday ? { outline: `1.5px solid ${r.cat.color}` } : {}),
+                      }
+                      return <span key={dateIso} className={'gc' + (on ? ' on' : '') + (isFuture ? ' future' : '')} style={cellStyle} title={dateIso} />
+                    })}
+                  </div>
+                  <span className="glance-streak">🔥{r.streak}</span>
+                </div>
+              ))}
             </div>
           )}
 
-          <div className="grid">
-            {!loadingMine && mineVisible.length === 0 && (
-              <div className="empty-hint">No habits in this category yet. Use "New habit" above to add one.</div>
-            )}
-            {mineVisible.map((h) => {
-              const cat = allCats[h.category] ?? FALLBACK_CAT
-              const doneSet = logsByHabit[h.id] ?? new Set()
-              const streak = computeStreak(doneSet, today)
-              const watchers = sharesByHabit[h.id] ?? []
-              const doneToday = doneSet.has(today)
-              const sharedWith = pairedPartnerByHabit[h.id]
-              return (
-                <div
-                  key={h.id}
-                  className="hcard"
-                  style={{ '--cat': cat.color, '--cat-soft': cat.soft }}
-                  onClick={() => openMineDetail(h)}
-                >
-                  <div className="hcard-top">
-                    <div className="hcard-icon">{cat.icon}</div>
-                    <div className="hcard-cat">{cat.label}</div>
-                  </div>
-                  <div className="hcard-name">{h.name}</div>
-                  {sharedWith && <div className="paired-note">🤝 Shared with {sharedWith}</div>}
-                  <div className="hcard-streak">
-                    <span className="num accent-num">{streak}</span>
-                    <span className="lbl">day streak</span>
-                  </div>
-                  <HabitCalendar doneSet={doneSet} color={cat.color} year={todayYear} month={todayMonthIdx} today={today} size="sm" />
-                  <div className="hcard-foot">
-                    <div className="watch-avatars">
-                      {watchers.map((w) => <span key={w.shareId} className="mini-avatar">{initial(w.name)}</span>)}
-                    </div>
-                    <button
-                      className={'quick-check' + (doneToday ? ' done' : '')}
-                      onClick={(e) => {
-                        e.stopPropagation()
-                        toggleHabitToday(h.id)
-                      }}
+          <div className="mine-toolbar">
+            <div className="cat-dropdown">
+              <button className="cat-dropdown-btn" onClick={() => setCatFilterOpen((v) => !v)}>
+                {categoryFilter !== 'all' && (
+                  <span className="dd-dot" style={{ background: (allCats[categoryFilter] ?? FALLBACK_CAT).color }} />
+                )}
+                <span className="dd-label">{categoryFilter === 'all' ? 'All categories' : (allCats[categoryFilter] ?? FALLBACK_CAT).label}</span>
+                <span className="dd-arrow">▾</span>
+              </button>
+              {catFilterOpen && (
+                <>
+                  <div className="bell-scrim" onClick={() => setCatFilterOpen(false)} />
+                  <div className="cat-dropdown-menu">
+                    <div
+                      className={'cat-dropdown-item' + (categoryFilter === 'all' ? ' active' : '')}
+                      onClick={() => { setCategoryFilter('all'); setCatFilterOpen(false) }}
                     >
-                      {doneToday ? '✓ Done today' : 'Mark done'}
-                    </button>
+                      All categories
+                    </div>
+                    <div className="cat-dropdown-sep" />
+                    {categoriesWithHabits.map((c) => {
+                      const cat = allCats[c] ?? FALLBACK_CAT
+                      return (
+                        <div
+                          key={c}
+                          className={'cat-dropdown-item' + (categoryFilter === c ? ' active' : '')}
+                          onClick={() => { setCategoryFilter(c); setCatFilterOpen(false) }}
+                        >
+                          <span className="dot" style={{ background: cat.color }} />{cat.label}
+                        </div>
+                      )
+                    })}
+                    <div className="cat-dropdown-sep" />
+                    <div className="cat-dropdown-item cat-dropdown-add" onClick={() => { setCatFilterOpen(false); setCatModalOpen(true) }}>
+                      ＋ Add category
+                    </div>
                   </div>
-                </div>
-              )
-            })}
+                </>
+              )}
+            </div>
           </div>
+
+          {!loadingMine && habits.length === 0 && (
+            <div className="empty-hint">No habits yet. Use "New habit" above to add one.</div>
+          )}
+
+          {orderedCategories.map((c) => {
+            const cat = allCats[c] ?? FALLBACK_CAT
+            const items = habitsSorted.filter((h) => h.category === c)
+            if (items.length === 0) return null
+            return (
+              <div className="cat-section" key={c}>
+                <div
+                  className="cat-section-head"
+                  draggable
+                  title="Drag to reorder this category"
+                  onDragStart={(e) => {
+                    e.dataTransfer.setData('text/category', c)
+                    e.currentTarget.classList.add('dragging')
+                  }}
+                  onDragEnd={(e) => e.currentTarget.classList.remove('dragging')}
+                  onDragOver={(e) => e.preventDefault()}
+                  onDrop={(e) => {
+                    e.preventDefault()
+                    reorderCategory(e.dataTransfer.getData('text/category'), c)
+                  }}
+                >
+                  <span className="cat-drag-handle">⠿</span>
+                  <span className="dot" style={{ background: cat.color }} />
+                  <h3>{cat.label}</h3>
+                  <span className="count">{items.length}</span>
+                </div>
+                <div className="cat-row">
+                  {items.map((h) => {
+                    const hcat = allCats[h.category] ?? FALLBACK_CAT
+                    const doneSet = logsByHabit[h.id] ?? new Set()
+                    const streak = computeStreak(doneSet, today)
+                    const sharedWith = pairedPartnerByHabit[h.id]
+                    return (
+                      <div
+                        key={h.id}
+                        className="hcard short"
+                        style={{ '--cat': hcat.color, '--cat-soft': hcat.soft }}
+                        onClick={() => openMineDetail(h)}
+                        draggable
+                        onDragStart={(e) => {
+                          e.dataTransfer.setData('text/plain', h.id)
+                          e.currentTarget.classList.add('dragging')
+                        }}
+                        onDragEnd={(e) => e.currentTarget.classList.remove('dragging')}
+                        onDragOver={(e) => e.preventDefault()}
+                        onDrop={(e) => {
+                          e.preventDefault()
+                          reorderHabit(e.dataTransfer.getData('text/plain'), h.id)
+                        }}
+                      >
+                        <span className="drag-handle" title="Drag to reorder">⠿</span>
+                        <div className="hcard-top">
+                          <div className="hcard-icon">{hcat.icon}</div>
+                          <div className="hcard-cat">{hcat.label}</div>
+                        </div>
+                        <div className="hcard-name">{h.name}</div>
+                        {sharedWith && <div className="paired-note">🤝 {sharedWith}</div>}
+                        <div className="hcard-streak">
+                          <span className="num accent-num">{streak}</span>
+                          <span className="lbl">day streak</span>
+                        </div>
+                        <HabitCalendar
+                          doneSet={doneSet}
+                          color={hcat.color}
+                          year={todayYear}
+                          month={todayMonthIdx}
+                          today={today}
+                          size="sm"
+                          onToggleToday={() => toggleHabitToday(h.id)}
+                        />
+                      </div>
+                    )
+                  })}
+                </div>
+              </div>
+            )
+          })}
+
+          {categoryFilter !== 'all' && habitsSorted.filter((h) => h.category === categoryFilter).length === 0 && (
+            <div className="empty-hint">No habits in this category yet.</div>
+          )}
         </>
       )}
 
@@ -747,13 +976,38 @@ export default function Habits({ profile }) {
             </div>
           )}
 
+          {pairs.length > 0 && (
+            <div className="shared-toolbar">
+              <div className="person-filters">
+                <button
+                  className={'filter-chip' + (sharedPersonFilter === 'all' ? ' active' : '')}
+                  onClick={() => setSharedPersonFilter('all')}
+                >
+                  <span className="dot" style={{ background: 'var(--ink)' }} />All
+                </button>
+                {sharedPartners.map((name) => (
+                  <button
+                    key={name}
+                    className={'person-filter-chip' + (sharedPersonFilter === name ? ' active' : '')}
+                    onClick={() => setSharedPersonFilter(name)}
+                  >
+                    <span className="pav">{initial(name)}</span>{name}
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
+
           <div className="grid">
             {!loadingPairs && pairs.length === 0 && incomingInvites.length === 0 && outgoingInvites.length === 0 && (
               <div className="empty-hint">
                 Nothing shared yet. Create a habit above and choose "Track it together" to invite someone in your circle.
               </div>
             )}
-            {pairs.map((p) => {
+            {!loadingPairs && pairs.length > 0 && pairsVisible.length === 0 && (
+              <div className="empty-hint">No shared habits with this person yet.</div>
+            )}
+            {pairsVisible.map((p) => {
               const cat = allCats[p.mine.category] ?? FALLBACK_CAT
               const myDone = logsByHabit[p.mine.id] ?? new Set()
               const theirDone = logsByHabit[p.partner.habitId] ?? new Set()
@@ -921,7 +1175,15 @@ export default function Habits({ profile }) {
                         <span className="cal-month-label">{monthLabel(panelMonth.year, panelMonth.month)}</span>
                         <button className="cal-nav-btn" onClick={() => shiftPanelMonth(1)}>›</button>
                       </div>
-                      <HabitCalendar doneSet={doneSet} color={cat.color} year={panelMonth.year} month={panelMonth.month} today={today} size="lg" />
+                      <HabitCalendar
+                        doneSet={doneSet}
+                        color={cat.color}
+                        year={panelMonth.year}
+                        month={panelMonth.month}
+                        today={today}
+                        size="lg"
+                        onToggleToday={() => toggleHabitToday(h.id)}
+                      />
                     </>
                   ) : (
                     <div className="chart-wrap">
