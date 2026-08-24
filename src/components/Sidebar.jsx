@@ -1,103 +1,144 @@
+import { useEffect, useRef, useState } from 'react'
 import { supabase } from '../supabaseClient'
+import ProfilePanel from './ProfilePanel'
 
 const NAV_ITEMS = [
-  { key: 'today', label: 'Today', icon: '☀' },
-  { key: 'focus', label: 'Focus', icon: '◐' },
-  { key: 'habits', label: 'Habits', icon: '↻' },
-  { key: 'journal', label: 'Journal', icon: '✎' },
-  { key: 'tasks', label: 'Tasks', icon: '✓' },
-  { key: 'goals', label: 'Goals', icon: '◎' },
-  { key: 'messages', label: 'Messages', icon: '∿' },
+  { key: 'today', label: 'Today', icon: '☀', tint: '#c98a2e', tintSoft: '#fdf1de' },
+  { key: 'focus', label: 'Focus', icon: '◐', tint: '#6a5acd', tintSoft: '#ece9fb' },
+  { key: 'habits', label: 'Habits', icon: '↻', tint: '#2f8f5b', tintSoft: '#e4f4ea' },
+  { key: 'journal', label: 'Journal', icon: '✎', tint: '#c0447a', tintSoft: '#fbe8f1' },
+  { key: 'tasks', label: 'Tasks', icon: '✓', tint: '#2f5da8', tintSoft: '#e7edfa' },
+  { key: 'goals', label: 'Goals', icon: '◎', tint: '#1f8a8c', tintSoft: '#e1f4f3' },
+  { key: 'messages', label: 'Messages', icon: '∿', tint: '#863bff', tintSoft: '#f1ecff' },
 ]
 
-const THEMES = [
-  { key: 'ocean', label: 'Ocean', swatch: '#1f8a8c' },
-  { key: 'forest', label: 'Forest', swatch: '#4c7a3f' },
-  { key: 'sky', label: 'Sky', swatch: '#2f8fd0' },
-  { key: 'dark', label: 'Dark', swatch: '#35b0ac' },
-]
+function initial(name) {
+  return (name || '?').charAt(0).toUpperCase()
+}
 
-// Left-hand app nav, always visible. Switches which main view is shown,
-// carries the signed-in user's identity, theme picker, and sign-out control,
-// and can be collapsed down to just icons to give the main view more room.
-// A couple of items (Focus, Journal) are visible but not built yet, they're
-// marked "soon" rather than hidden so the eventual shape of the app is clear.
-export default function Sidebar({ profile, view, onChangeView, collapsed, onToggleCollapsed, theme, onChangeTheme }) {
+// The left-hand nav — a floating "dock" that sits off the edges of the
+// screen (round 6 redesign): a slim icon rail by default, pinned open or
+// expanded on hover to show labels. Reserves a fixed-width spacer in normal
+// document flow so the rest of the app never reflows when it expands — the
+// dock itself is a fixed overlay that floats on top instead.
+export default function Sidebar({ profile, view, onChangeView, theme, onChangeTheme, onUpdateProfile }) {
+  const [pinned, setPinned] = useState(() => {
+    try {
+      return localStorage.getItem('flowify-nav-pinned') === '1'
+    } catch {
+      return false
+    }
+  })
+  const [accountOpen, setAccountOpen] = useState(false)
+  const [profilePanel, setProfilePanel] = useState(null) // null | { editMode: boolean }
+  const itemsRef = useRef(null)
+  const highlightRef = useRef(null)
+
+  function togglePinned() {
+    setPinned((prev) => {
+      const next = !prev
+      try {
+        localStorage.setItem('flowify-nav-pinned', next ? '1' : '0')
+      } catch {
+        // Private browsing / storage disabled — pinning still works this session.
+      }
+      return next
+    })
+  }
+
+  useEffect(() => {
+    const activeBtn = itemsRef.current?.querySelector('.dock-item.active')
+    if (activeBtn && highlightRef.current) {
+      highlightRef.current.style.transform = `translateY(${activeBtn.offsetTop}px)`
+    }
+  }, [view])
+
   return (
-    <div className={'app-nav' + (collapsed ? ' collapsed' : '')}>
-      <button
-        className="app-nav-toggle"
-        onClick={onToggleCollapsed}
-        aria-label={collapsed ? 'Expand menu' : 'Collapse menu'}
-        title={collapsed ? 'Expand menu' : 'Collapse menu'}
-      >
-        {collapsed ? '›' : '‹'}
-      </button>
+    <>
+      <div className="dock-spacer" aria-hidden="true" />
+      <nav className={'dock' + (pinned ? ' pinned' : '')}>
+        <button className="dock-pin" title={pinned ? 'Unpin sidebar' : 'Pin sidebar open'} onClick={togglePinned}>
+          📌
+        </button>
 
-      <div className="app-nav-header">
-        {!collapsed && <div className="app-nav-brand">Flowify</div>}
-      </div>
+        <div className="dock-top">
+          <div className="brand-badge">
+            <svg xmlns="http://www.w3.org/2000/svg" width="48" height="46" fill="none" viewBox="0 0 48 46">
+              <path fill="#863bff" d="M25.946 44.938c-.664.845-2.021.375-2.021-.698V33.937a2.26 2.26 0 0 0-2.262-2.262H10.287c-.92 0-1.456-1.04-.92-1.788l7.48-10.471c1.07-1.497 0-3.578-1.842-3.578H1.237c-.92 0-1.456-1.04-.92-1.788L10.013.474c.214-.297.556-.474.92-.474h28.894c.92 0 1.456 1.04.92 1.788l-7.48 10.471c-1.07 1.498 0 3.579 1.842 3.579h11.377c.943 0 1.473 1.088.89 1.83L25.947 44.94z" />
+            </svg>
+          </div>
+          <div className="brand-name">Flowify</div>
+        </div>
 
-      <nav className="app-nav-list">
-        {NAV_ITEMS.map((item) => (
-          <button
-            key={item.key}
-            className={'app-nav-item' + (view === item.key ? ' active' : '') + (item.soon ? ' soon' : '')}
-            onClick={() => !item.soon && onChangeView(item.key)}
-            disabled={item.soon}
-            title={collapsed ? item.label + (item.soon ? ' (coming soon)' : '') : undefined}
-          >
-            <span className="app-nav-icon" aria-hidden="true">
-              {item.icon}
-            </span>
-            {!collapsed && (
-              <span className="app-nav-item-label">
-                {item.label}
-                {item.soon && <span className="soon-tag">soon</span>}
-              </span>
+        <div className="dock-items" ref={itemsRef}>
+          <div className="dock-highlight" ref={highlightRef} />
+          {NAV_ITEMS.map((item) => (
+            <button
+              key={item.key}
+              className={'dock-item' + (view === item.key ? ' active' : '')}
+              style={{ '--tint': item.tint, '--tint-soft': item.tintSoft }}
+              onClick={() => onChangeView(item.key)}
+            >
+              <span className="ic">{item.icon}</span>
+              <span className="lbl">{item.label}</span>
+            </button>
+          ))}
+        </div>
+
+        <div className="dock-bottom">
+          <button className="dock-account-btn" onClick={() => setAccountOpen((v) => !v)}>
+            {profile.avatar_url ? (
+              <img className="dock-avatar-img" src={profile.avatar_url} alt="" />
+            ) : (
+              <div className="dock-avatar">{initial(profile.display_name)}</div>
             )}
+            <div className="dock-user">
+              <span className="nm">{profile.display_name}</span>
+              <span className="plan">@{profile.flow_id}</span>
+            </div>
           </button>
-        ))}
+        </div>
       </nav>
 
-      {!collapsed && (
-        <div className="app-nav-theme">
-          <div className="app-nav-theme-label">Theme</div>
-          <div className="app-nav-theme-row">
-            {THEMES.map((t) => (
-              <button
-                key={t.key}
-                className={'theme-swatch' + (theme === t.key ? ' active' : '')}
-                style={{ background: t.swatch }}
-                onClick={() => onChangeTheme(t.key)}
-                aria-label={`Switch to ${t.label} theme`}
-                title={t.label}
-              />
-            ))}
+      {accountOpen && (
+        <>
+          <div className="account-scrim" onClick={() => setAccountOpen(false)} />
+          <div className={'account-popover' + (pinned ? ' expanded' : '')}>
+            <div className="account-popover-head">
+              {profile.avatar_url ? (
+                <img className="account-popover-av-img" src={profile.avatar_url} alt="" />
+              ) : (
+                <div className="av">{initial(profile.display_name)}</div>
+              )}
+              <div>
+                <div className="nm">{profile.display_name}</div>
+                <div className="em">@{profile.flow_id}</div>
+              </div>
+            </div>
+            <div className="account-popover-item" onClick={() => { setAccountOpen(false); setProfilePanel({ editMode: false }) }}>
+              <span className="ic">👤</span>View profile
+            </div>
+            <div className="account-popover-item" onClick={() => { setAccountOpen(false); setProfilePanel({ editMode: true }) }}>
+              <span className="ic">✎</span>Edit profile
+            </div>
+            <div className="account-popover-sep" />
+            <div className="account-popover-item danger" onClick={() => supabase.auth.signOut()}>
+              <span className="ic">🚪</span>Log out
+            </div>
           </div>
-        </div>
+        </>
       )}
 
-      <div className="app-nav-footer">
-        <div className="app-nav-user">
-          <div className="avatar" title={collapsed ? profile.display_name : undefined}>
-            {profile.display_name.charAt(0).toUpperCase()}
-          </div>
-          {!collapsed && (
-            <div>
-              <div className="app-nav-name">{profile.display_name}</div>
-              <div className="app-nav-id">{profile.flow_id}</div>
-            </div>
-          )}
-        </div>
-        <button
-          className="link-button"
-          onClick={() => supabase.auth.signOut()}
-          title={collapsed ? 'Sign out' : undefined}
-        >
-          {collapsed ? '⏻' : 'Sign out'}
-        </button>
-      </div>
-    </div>
+      {profilePanel && (
+        <ProfilePanel
+          profile={profile}
+          theme={theme}
+          onChangeTheme={onChangeTheme}
+          onUpdateProfile={onUpdateProfile}
+          initialEdit={profilePanel.editMode}
+          onClose={() => setProfilePanel(null)}
+        />
+      )}
+    </>
   )
 }
