@@ -31,8 +31,16 @@ export default function Sidebar({ profile, view, onChangeView, theme, onChangeTh
   })
   const [accountOpen, setAccountOpen] = useState(false)
   const [profilePanel, setProfilePanel] = useState(null) // null | { editMode: boolean }
+  const [hovered, setHovered] = useState(false)
   const itemsRef = useRef(null)
   const highlightRef = useRef(null)
+
+  // Single source of truth for "is the dock showing its expanded (labels
+  // visible) width right now" — driven from React instead of a plain CSS
+  // :hover so the reserved spacer next to it can stay in sync. A CSS-only
+  // :hover on .dock has no way to also widen its sibling .dock-spacer,
+  // which is what let the dock overlap the page content while expanded.
+  const expanded = pinned || hovered || accountOpen || !!profilePanel
 
   function togglePinned() {
     setPinned((prev) => {
@@ -55,8 +63,12 @@ export default function Sidebar({ profile, view, onChangeView, theme, onChangeTh
 
   return (
     <>
-      <div className="dock-spacer" aria-hidden="true" />
-      <nav className={'dock' + (pinned ? ' pinned' : '')}>
+      <div className={'dock-spacer' + (expanded ? ' expanded' : '')} aria-hidden="true" />
+      <nav
+        className={'dock' + (pinned ? ' pinned' : '') + (expanded ? ' expanded' : '')}
+        onMouseEnter={() => setHovered(true)}
+        onMouseLeave={() => setHovered(false)}
+      >
         <button className="dock-pin" title={pinned ? 'Unpin sidebar' : 'Pin sidebar open'} onClick={togglePinned}>
           📌
         </button>
@@ -103,7 +115,7 @@ export default function Sidebar({ profile, view, onChangeView, theme, onChangeTh
       {accountOpen && (
         <>
           <div className="account-scrim" onClick={() => setAccountOpen(false)} />
-          <div className={'account-popover' + (pinned ? ' expanded' : '')}>
+          <div className={'account-popover' + (expanded ? ' expanded' : '')}>
             <div className="account-popover-head">
               {profile.avatar_url ? (
                 <img className="account-popover-av-img" src={profile.avatar_url} alt="" />
