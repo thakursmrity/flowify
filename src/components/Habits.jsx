@@ -148,7 +148,17 @@ export default function Habits({ profile }) {
   const todayYear = now.getFullYear()
   const todayMonthIdx = now.getMonth()
 
-  const [tab, setTab] = useState('mine') // 'mine' | 'shared' | 'supporting'
+  const [tab, setTab] = useState('mine') // 'mine' | 'together' | 'supporting'
+  const [dismissedExplainer, setDismissedExplainer] = useState(() => {
+    try {
+      return {
+        together: localStorage.getItem('flowify-habit-explainer-together') === '1',
+        supporting: localStorage.getItem('flowify-habit-explainer-supporting') === '1',
+      }
+    } catch {
+      return { together: false, supporting: false }
+    }
+  })
   const [categoryFilter, setCategoryFilter] = useState('all')
   const [catFilterOpen, setCatFilterOpen] = useState(false)
   const [categoryOrder, setCategoryOrder] = useState(DEFAULT_CATEGORY_ORDER)
@@ -176,6 +186,8 @@ export default function Habits({ profile }) {
 
   const [openShareId, setOpenShareId] = useState(null)
   const [shareChoice, setShareChoice] = useState('')
+  const [openPairId, setOpenPairId] = useState(null)
+  const [pairChoice, setPairChoice] = useState('')
   const [editingCatFor, setEditingCatFor] = useState(null)
 
   const [detail, setDetail] = useState(null) // { type: 'mine'|'shared'|'supporting', ... }
@@ -304,7 +316,11 @@ export default function Habits({ profile }) {
       if (p.status === 'pending') {
         const inviterHabit = habitById[p.habit_a_id]
         if (!inviterHabit) continue
-        const entry = { pairId: p.id, name: inviterHabit.name, category: inviterHabit.category, otherName }
+        // habitId is only meaningful for an outgoing invite (it's always
+        // the inviter's own habit_a_id) — used so the "mine" detail panel
+        // can tell whether ITS habit already has an invite out, and hide
+        // the "Track this together" action while one's pending.
+        const entry = { pairId: p.id, name: inviterHabit.name, category: inviterHabit.category, otherName, habitId: p.habit_a_id }
         if (iAmA) outgoing.push(entry)
         else incoming.push(entry)
         continue
@@ -532,6 +548,41 @@ export default function Habits({ profile }) {
     await supabase.from('habit_shares').delete().eq('id', shareId)
   }
 
+  // Turn an existing (already-created) habit into a Together pairing — the
+  // same invite-first flow create_shared_habit uses at creation time, just
+  // targeting a habit that's already there instead of making a new one.
+  async function confirmPair(habitId) {
+    if (!pairChoice) return
+    const { error } = await supabase.rpc('pair_existing_habit', { p_habit_id: habitId, p_partner_id: pairChoice })
+    const partnerName = contacts.find((c) => c.id === pairChoice)?.display_name ?? 'them'
+    if (error) {
+      showToast(error.message || 'Could not send that invite')
+    } else {
+      showToast(`Invite sent to ${partnerName} — it'll show as Together once they accept`)
+      await loadPairs()
+    }
+    setOpenPairId(null)
+    setPairChoice('')
+  }
+
+  function dismissExplainer(kind) {
+    setDismissedExplainer((prev) => ({ ...prev, [kind]: true }))
+    try {
+      localStorage.setItem(`flowify-habit-explainer-${kind}`, '1')
+    } catch {
+      // Private browsing / storage disabled — it'll just re-show next visit.
+    }
+  }
+
+  function showExplainerAgain(kind) {
+    setDismissedExplainer((prev) => ({ ...prev, [kind]: false }))
+    try {
+      localStorage.removeItem(`flowify-habit-explainer-${kind}`)
+    } catch {
+      // ignore
+    }
+  }
+
   async function sendPairNudge(pair) {
     const message = `${profile.display_name} nudged you about ${pair.mine.name} — catch up together!`
     const { error } = await supabase
@@ -602,9 +653,12 @@ export default function Habits({ profile }) {
         showToast(error.message || 'Could not send that invite')
       } else {
         await loadPairs()
-        showToast(`Invite sent to ${partnerName} — it'll show as Shared once they accept`)
+        showToast(`Invite sent to ${partnerName} — it'll show as Together once they accept`)
       }
     } else {
+      // 'me' and 'support' both start with a plain habit insert — 'support'
+      // just also adds a habit_shares row right after, same as picking
+      // "＋ Share with someone" from the detail panel would.
       const inCat = habits.filter((h) => h.category === modalCategory)
       const nextOrder = inCat.length ? Math.max(...inCat.map((h) => h.sort_order ?? 0)) + 1 : 0
       const { data, error } = await supabase
@@ -614,6 +668,20 @@ export default function Habits({ profile }) {
         .single()
       if (!error && data) {
         setHabits((prev) => [...prev, data])
+        if (modalWho === 'support' && modalPartnerId) {
+          const { data: shareRow, error: shareError } = await supabase
+            .from('habit_shares')
+            .insert({ habit_id: data.id, owner_id: profile.id, shared_with_id: modalPartnerId })
+            .select()
+            .single()
+          if (!shareError && shareRow) {
+            const contact = contacts.find((c) => c.id === modalPartnerId)
+            setSharesByHabit((prev) => ({
+              ...prev,
+              [data.id]: [...(prev[data.id] ?? []), { shareId: shareRow.id, contactId: modalPartnerId, name: contact?.display_name ?? 'Someone' }],
+            }))
+          }
+        }
         showToast('Habit created')
       } else {
         showToast('Could not create that habit')
@@ -762,10 +830,10 @@ export default function Habits({ profile }) {
       <div className="hx-tabs-row">
         <div className="seg">
           <button className={tab === 'mine' ? 'active' : ''} onClick={() => setTab('mine')}>My habits</button>
-          <button className={tab === 'shared' ? 'active' : ''} onClick={() => setTab('shared')}>
-            Shared{incomingInvites.length > 0 ? ` (${incomingInvites.length})` : ''}
+          <button className={tab === 'together' ? 'active together-active' : ''} onClick={() => setTab('together')}>
+            🤝 Together{incomingInvites.length > 0 ? ` (${incomingInvites.length})` : ''}
           </button>
-          <button className={tab === 'supporting' ? 'active' : ''} onClick={() => setTab('supporting')}>Supporting</button>
+          <button className={tab === 'supporting' ? 'active support-active' : ''} onClick={() => setTab('supporting')}>👀 Supporting</button>
         </div>
         <div className="quote-banner">
           <span className="quote-text">"{QUOTES[quoteIdx]}"</span>
@@ -903,6 +971,7 @@ export default function Habits({ profile }) {
                     const doneSet = logsByHabit[h.id] ?? new Set()
                     const streak = computeStreak(doneSet, today)
                     const sharedWith = pairedPartnerByHabit[h.id]
+                    const watcherCount = (sharesByHabit[h.id] ?? []).length
                     return (
                       <div
                         key={h.id}
@@ -927,7 +996,12 @@ export default function Habits({ profile }) {
                           <div className="hcard-cat">{hcat.label}</div>
                         </div>
                         <div className="hcard-name">{h.name}</div>
-                        {sharedWith && <div className="paired-note">🤝 {sharedWith}</div>}
+                        {(sharedWith || watcherCount > 0) && (
+                          <div className="badge-row">
+                            {sharedWith && <span className="badge together">🤝 Together with {sharedWith}</span>}
+                            {watcherCount > 0 && <span className="badge support">👀 {watcherCount} supporting</span>}
+                          </div>
+                        )}
                         <div className="hcard-streak">
                           <span className="num accent-num">{streak}</span>
                           <span className="lbl">day streak</span>
@@ -955,8 +1029,21 @@ export default function Habits({ profile }) {
         </>
       )}
 
-      {tab === 'shared' && (
+      {tab === 'together' && (
         <>
+          {dismissedExplainer.together ? (
+            <button className="show-explainer" onClick={() => showExplainerAgain('together')}>ⓘ What does "Together" mean?</button>
+          ) : (
+            <div className="explainer-card together">
+              <div className="eic">🤝</div>
+              <div>
+                <h4>What "Together" means</h4>
+                <p>You both track it yourselves. Two streaks, side by side — nudge each other, compare progress, keep each other honest. Good for a bit of friendly competition.</p>
+              </div>
+              <button className="dismiss-btn" onClick={() => dismissExplainer('together')} title="Hide this">✕</button>
+            </div>
+          )}
+
           {(incomingInvites.length > 0 || outgoingInvites.length > 0) && (
             <div className="invites-row">
               {incomingInvites.map((inv) => (
@@ -1001,11 +1088,11 @@ export default function Habits({ profile }) {
           <div className="grid">
             {!loadingPairs && pairs.length === 0 && incomingInvites.length === 0 && outgoingInvites.length === 0 && (
               <div className="empty-hint">
-                Nothing shared yet. Create a habit above and choose "Track it together" to invite someone in your circle.
+                Nothing here yet. Create a habit above and choose "Track it together", or open one of your habits and use "Track this together" to invite someone in your circle.
               </div>
             )}
             {!loadingPairs && pairs.length > 0 && pairsVisible.length === 0 && (
-              <div className="empty-hint">No shared habits with this person yet.</div>
+              <div className="empty-hint">No Together habits with this person yet.</div>
             )}
             {pairsVisible.map((p) => {
               const cat = allCats[p.mine.category] ?? FALLBACK_CAT
@@ -1054,6 +1141,19 @@ export default function Habits({ profile }) {
 
       {tab === 'supporting' && (
         <>
+          {dismissedExplainer.supporting ? (
+            <button className="show-explainer" onClick={() => showExplainerAgain('supporting')}>ⓘ What does "Supporting" mean?</button>
+          ) : (
+            <div className="explainer-card support">
+              <div className="eic">👀</div>
+              <div>
+                <h4>What "Supporting" means</h4>
+                <p>It's their habit, not yours — you just get to watch their calendar and cheer them on. There's nothing for you to check off here.</p>
+              </div>
+              <button className="dismiss-btn" onClick={() => dismissExplainer('supporting')} title="Hide this">✕</button>
+            </div>
+          )}
+
           {supporting.length > 0 && (
             <div className="people-row">
               {supporting.map((p) => (
@@ -1128,6 +1228,8 @@ export default function Habits({ profile }) {
               const weeks = weeklyCounts(doneSet, today, 8)
               const watchers = sharesByHabit[h.id] ?? []
               const availableContacts = contacts.filter((c) => !watchers.some((w) => w.contactId === c.id))
+              const togetherPartner = pairedPartnerByHabit[h.id]
+              const pendingOutgoing = outgoingInvites.find((o) => o.habitId === h.id)
 
               return (
                 <>
@@ -1194,6 +1296,38 @@ export default function Habits({ profile }) {
                         </div>
                       ))}
                     </div>
+                  )}
+
+                  <div className="panel-section-title">Together</div>
+                  {togetherPartner ? (
+                    <div className="watch-list">
+                      <div className="watch-item">
+                        <span className="pav">{initial(togetherPartner)}</span>
+                        <span className="nm">🤝 Together with {togetherPartner}</span>
+                      </div>
+                    </div>
+                  ) : pendingOutgoing ? (
+                    <div className="empty-hint small" style={{ padding: '10px 0' }}>
+                      Invite sent to {pendingOutgoing.otherName} — waiting for them to accept.
+                    </div>
+                  ) : openPairId === h.id ? (
+                    contacts.length > 0 ? (
+                      <div className="share-panel">
+                        <select value={pairChoice} onChange={(e) => setPairChoice(e.target.value)}>
+                          <option value="">Choose from your circle...</option>
+                          {contacts.map((c) => <option key={c.id} value={c.id}>{c.display_name}</option>)}
+                        </select>
+                        <button className="share-confirm" disabled={!pairChoice} onClick={() => confirmPair(h.id)}>Invite</button>
+                        <button className="share-cancel" onClick={() => setOpenPairId(null)}>Cancel</button>
+                      </div>
+                    ) : (
+                      <div className="share-panel">
+                        <span className="empty-hint small">Add someone to your circle first, from Messages.</span>
+                        <button className="share-cancel" onClick={() => setOpenPairId(null)}>Close</button>
+                      </div>
+                    )
+                  ) : (
+                    <button className="add-share-btn" onClick={() => { setOpenPairId(h.id); setPairChoice('') }}>🤝 Track this together</button>
                   )}
 
                   <div className="panel-section-title">Shared with</div>
@@ -1340,16 +1474,42 @@ export default function Habits({ profile }) {
               <button className="cat-pick cat-pick-add" onClick={() => setCatModalOpen(true)}>＋ New</button>
             </div>
 
-            <div className="field-label">Who's tracking this?</div>
-            <div className="who-pick-row">
-              <div className={'who-pick' + (modalWho === 'me' ? ' active' : '')} onClick={() => setModalWho('me')}>
-                <span className="rd" />Just me — private
+            <div className="field-label">Who's this for</div>
+            <div className="share-choice-row">
+              <div
+                className={'share-choice solo' + (modalWho === 'me' ? ' active' : '')}
+                onClick={() => { setModalWho('me'); setModalPartnerId('') }}
+              >
+                <div className="ic">🙋</div>
+                <div>
+                  <h5>Just for me</h5>
+                  <p>No one else sees this unless you decide to share it later.</p>
+                </div>
               </div>
-              <div className={'who-pick' + (modalWho === 'together' ? ' active' : '')} onClick={() => setModalWho('together')}>
-                <span className="rd" />Track it together — invite someone, they accept, then both streaks compare
+
+              <div
+                className={'share-choice together' + (modalWho === 'together' ? ' active' : '')}
+                onClick={() => setModalWho('together')}
+              >
+                <div className="ic">🤝</div>
+                <h5>Track it together</h5>
+                <p>Invite someone from your circle — you'll both log it yourselves and compare streaks. Good for friendly competition.</p>
               </div>
-              {modalWho === 'together' && (
-                <div className="contact-pick-row">
+
+              <div
+                className={'share-choice support' + (modalWho === 'support' ? ' active' : '')}
+                onClick={() => setModalWho('support')}
+              >
+                <div className="ic">👀</div>
+                <h5>Share for support</h5>
+                <p>Invite someone to watch your progress and cheer you on. They don't track anything — this stays only your habit.</p>
+              </div>
+            </div>
+
+            {(modalWho === 'together' || modalWho === 'support') && (
+              <>
+                <div className="field-label">Choose from your circle</div>
+                <div className="contact-pick-row contact-pick-row-flat">
                   {contacts.length === 0 && <span className="empty-hint small">Add someone to your circle first, from Messages.</span>}
                   {contacts.map((c) => (
                     <button
@@ -1361,20 +1521,19 @@ export default function Habits({ profile }) {
                     </button>
                   ))}
                 </div>
-              )}
-              <div className={'who-pick' + (modalWho === 'later' ? ' active' : '')} onClick={() => setModalWho('later')}>
-                <span className="rd" />Decide later — I'll share it from the habit card
-              </div>
-            </div>
+              </>
+            )}
 
             <div className="modal-actions">
               <button className="btn-cancel" onClick={() => setModalOpen(false)}>Cancel</button>
               <button
                 className="btn-create"
-                disabled={!modalName.trim() || (modalWho === 'together' && !modalPartnerId) || creatingHabit}
+                disabled={!modalName.trim() || ((modalWho === 'together' || modalWho === 'support') && !modalPartnerId) || creatingHabit}
                 onClick={submitNewHabit}
               >
-                {creatingHabit ? (modalWho === 'together' ? 'Sending…' : 'Creating…') : modalWho === 'together' ? 'Send invite' : 'Create habit'}
+                {creatingHabit
+                  ? modalWho === 'together' ? 'Sending…' : 'Creating…'
+                  : modalWho === 'together' ? 'Send invite' : 'Create habit'}
               </button>
             </div>
           </div>
