@@ -22,6 +22,7 @@ to go next" below).
   controlling exactly what each signed-in user is allowed to read or write
   (see `supabase/schema.sql` for those rules, with comments).
 
+
 ## Project layout
 
 ```
