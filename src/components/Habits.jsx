@@ -559,10 +559,14 @@ export default function Habits({ profile }) {
     })
   }
 
-  const pairedMineIds = new Set(pairs.map((p) => p.mine.id))
-  const mineVisible = habits.filter(
-    (h) => !pairedMineIds.has(h.id) && (categoryFilter === 'all' || h.category === categoryFilter)
-  )
+  // A shared habit lives in BOTH places: it's still yours to check off day
+  // to day (My habits), and it's also where you compare streaks (Shared).
+  // This map is just for a small "shared with X" note on the card, not a
+  // filter — nothing gets hidden from My habits because it's paired.
+  const pairedPartnerByHabit = {}
+  for (const p of pairs) pairedPartnerByHabit[p.mine.id] = p.partner.name
+
+  const mineVisible = habits.filter((h) => categoryFilter === 'all' || h.category === categoryFilter)
   const activePerson = supporting.find((p) => p.ownerId === activePersonId) ?? supporting[0] ?? null
   const unseenCount = nudges.filter((n) => !n.seen).length + incomingInvites.length
 
@@ -682,6 +686,7 @@ export default function Habits({ profile }) {
               const streak = computeStreak(doneSet, today)
               const watchers = sharesByHabit[h.id] ?? []
               const doneToday = doneSet.has(today)
+              const sharedWith = pairedPartnerByHabit[h.id]
               return (
                 <div
                   key={h.id}
@@ -694,6 +699,7 @@ export default function Habits({ profile }) {
                     <div className="hcard-cat">{cat.label}</div>
                   </div>
                   <div className="hcard-name">{h.name}</div>
+                  {sharedWith && <div className="paired-note">🤝 Shared with {sharedWith}</div>}
                   <div className="hcard-streak">
                     <span className="num accent-num">{streak}</span>
                     <span className="lbl">day streak</span>
