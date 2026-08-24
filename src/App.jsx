@@ -1,7 +1,9 @@
 import { useEffect, useState } from 'react'
 import { supabase } from './supabaseClient'
-import Auth from './components/Auth'
+import AuthFlow from './components/AuthFlow'
+import { PASSWORD_RESET_PENDING_KEY } from './lib/authHelpers'
 import ProfileSetup from './components/ProfileSetup'
+import PasswordReset from './components/PasswordReset'
 import Sidebar from './components/Sidebar'
 import Today from './components/Today'
 import Focus from './components/Focus'
@@ -16,9 +18,13 @@ export default function App() {
   const [session, setSession] = useState(undefined) // undefined = still checking, null = signed out
   const [profile, setProfile] = useState(undefined) // undefined = still checking, null = no profile yet
   const [view, setView] = useState('today')
-  const [navCollapsed, setNavCollapsed] = useState(() => {
+  // Set by AuthFlow right before it verifies a "forgot password" code —
+  // verifying signs the person in with their OLD password still active, so
+  // this flag (not which component happens to be mounted) is what forces
+  // the "set a new password" screen before they see the rest of the app.
+  const [pendingPasswordReset, setPendingPasswordReset] = useState(() => {
     try {
-      return localStorage.getItem('flowify-nav-collapsed') === '1'
+      return sessionStorage.getItem(PASSWORD_RESET_PENDING_KEY) === '1'
     } catch {
       return false
     }
@@ -31,16 +37,8 @@ export default function App() {
     }
   })
 
-  function toggleNavCollapsed() {
-    setNavCollapsed((prev) => {
-      const next = !prev
-      try {
-        localStorage.setItem('flowify-nav-collapsed', next ? '1' : '0')
-      } catch {
-        // Private browsing / storage disabled — collapsing still works for this session, just won't be remembered.
-      }
-      return next
-    })
+  function updateProfileFields(fields) {
+    setProfile((prev) => (prev ? { ...prev, ...fields } : prev))
   }
 
   // Applies the active theme to the whole document (every CSS custom
@@ -89,7 +87,7 @@ export default function App() {
     async function loadProfile() {
       const { data, error } = await supabase
         .from('profiles')
-        .select('id, flow_id, display_name, theme')
+        .select('id, flow_id, display_name, theme, avatar_url')
         .eq('id', session.user.id)
         .maybeSingle()
 
@@ -124,23 +122,26 @@ export default function App() {
   }
 
   if (!session) {
-    return <Auth />
+    return <AuthFlow />
   }
 
   if (!profile) {
     return <ProfileSetup userId={session.user.id} onDone={setProfile} />
   }
 
+  if (pendingPasswordReset) {
+    return <PasswordReset onDone={() => setPendingPasswordReset(false)} />
+  }
+
   return (
-    <div className={'app-shell' + (navCollapsed ? ' nav-collapsed' : '')}>
+    <div className="app-shell">
       <Sidebar
         profile={profile}
         view={view}
         onChangeView={setView}
-        collapsed={navCollapsed}
-        onToggleCollapsed={toggleNavCollapsed}
         theme={theme}
         onChangeTheme={changeTheme}
+        onUpdateProfile={updateProfileFields}
       />
       <div className="app-main">
         {view === 'today' && <Today profile={profile} onNavigate={setView} />}
