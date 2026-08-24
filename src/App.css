@@ -3298,3 +3298,12 @@
   border-color: var(--ink);
   box-shadow: 0 0 0 2px var(--surface);
 }
+
+.paired-note {
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--sync);
+  margin: -2px 0 10px;
+  position: relative;
+  z-index: 1;
+}
