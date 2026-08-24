@@ -1,4 +1,5 @@
 import { useRef, useState } from 'react'
+import { PHONE_COUNTRIES } from '../lib/authHelpers'
 
 // Small presentational building blocks shared by the signed-out screens
 // (AuthFlow.jsx) and the signed-in ones that also touch auth
@@ -30,6 +31,55 @@ export function OtpInputs({ values, onChange }) {
           }}
         />
       ))}
+    </div>
+  )
+}
+
+// A phone number field with its own country-code dropdown, instead of one
+// free-text box a person has to remember to prefix with "+" themselves.
+// `value`/`onChange` carry the full combined number (e.g. "+919876543210")
+// so callers don't need to know anything about country codes — the digits
+// shown in the box are just derived from whatever comes after the
+// currently-selected country's dial code.
+export function PhoneField({ value, onChange }) {
+  const [countryIdx, setCountryIdx] = useState(0) // India, first in the list
+
+  const country = PHONE_COUNTRIES[countryIdx]
+  const digits = value.startsWith(country.dial) ? value.slice(country.dial.length) : value.replace(/^\+?\d*/, '')
+
+  function handleCountryChange(idx) {
+    setCountryIdx(idx)
+    onChange(PHONE_COUNTRIES[idx].dial + digits)
+  }
+
+  function handleDigitsChange(raw) {
+    const nextDigits = raw.replace(/[^0-9]/g, '').slice(0, country.maxDigits)
+    onChange(country.dial + nextDigits)
+  }
+
+  return (
+    <div className="authx-phone-field">
+      <select
+        className="authx-phone-country"
+        value={countryIdx}
+        onChange={(e) => handleCountryChange(Number(e.target.value))}
+        aria-label="Country code"
+      >
+        {PHONE_COUNTRIES.map((c, i) => (
+          <option key={c.code} value={i}>
+            {c.flag} {c.dial}
+          </option>
+        ))}
+      </select>
+      <input
+        type="tel"
+        inputMode="numeric"
+        className="authx-phone-number"
+        value={digits}
+        maxLength={country.maxDigits}
+        placeholder={'X'.repeat(country.maxDigits)}
+        onChange={(e) => handleDigitsChange(e.target.value)}
+      />
     </div>
   )
 }
