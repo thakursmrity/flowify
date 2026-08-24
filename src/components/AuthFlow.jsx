@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { supabase } from '../supabaseClient'
-import { AuthCard, Logo, OtpInputs, PasswordField } from './AuthWidgets'
+import { AuthCard, Logo, OtpInputs, PasswordField, PhoneField } from './AuthWidgets'
 import { PASSWORD_RESET_PENDING_KEY } from '../lib/authHelpers'
 
 // The whole signed-out experience: a real intro to Flowify, then sign up
@@ -91,10 +91,15 @@ function SignupScreen({ onLogin, onBack }) {
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
 
+  // Email needs an "@"; phone needs a real number of digits after the
+  // country code, not just a non-empty string, since PhoneField always
+  // carries at least a dial code ("+91") even before anything's typed.
+  const canSend = method === 'email' ? contact.trim().includes('@') : contact.replace(/\D/g, '').length >= 6
+
   async function sendCode() {
     setError('')
     const trimmed = contact.trim()
-    if (!trimmed) return
+    if (!canSend) return
     setLoading(true)
     const { error } = await supabase.auth.signInWithOtp(
       method === 'email' ? { email: trimmed, options: { shouldCreateUser: true } } : { phone: trimmed, options: { shouldCreateUser: true } }
@@ -135,27 +140,32 @@ function SignupScreen({ onLogin, onBack }) {
           <p className="authx-sub">Choose how you'd like to sign up — you'll verify it with a one-time code.</p>
 
           <div className="authx-method-row">
-            <div className={'authx-method-card' + (method === 'email' ? ' active' : '')} onClick={() => setMethod('email')}>
+            <div
+              className={'authx-method-card' + (method === 'email' ? ' active' : '')}
+              onClick={() => { setMethod('email'); setContact('') }}
+            >
               <div className="ic">📧</div>
               <div className="t">Email</div>
             </div>
-            <div className={'authx-method-card' + (method === 'phone' ? ' active' : '')} onClick={() => setMethod('phone')}>
+            <div
+              className={'authx-method-card' + (method === 'phone' ? ' active' : '')}
+              onClick={() => { setMethod('phone'); setContact('+91') }}
+            >
               <div className="ic">📱</div>
               <div className="t">Phone number</div>
             </div>
           </div>
 
           <div className="authx-field-label">{method === 'email' ? 'Email address' : 'Phone number'}</div>
-          <input
-            type="text"
-            value={contact}
-            onChange={(e) => setContact(e.target.value)}
-            placeholder={method === 'email' ? 'you@example.com' : '+1 555 0100'}
-          />
+          {method === 'email' ? (
+            <input type="text" value={contact} onChange={(e) => setContact(e.target.value)} placeholder="you@example.com" />
+          ) : (
+            <PhoneField value={contact} onChange={setContact} />
+          )}
 
           {error && <div className="authx-error">{error}</div>}
 
-          <button className="authx-primary-btn" disabled={!contact.trim() || loading} onClick={sendCode}>
+          <button className="authx-primary-btn" disabled={!canSend || loading} onClick={sendCode}>
             {loading ? 'Sending…' : 'Send verification code'}
           </button>
           <div className="authx-secondary-link" onClick={onLogin}>Already have an account? <b>Log in</b></div>
@@ -184,16 +194,35 @@ function SignupScreen({ onLogin, onBack }) {
   )
 }
 
+const LOGIN_METHODS = [
+  { key: 'email', icon: '📧', label: 'Email' },
+  { key: 'phone', icon: '📱', label: 'Phone' },
+  { key: 'flowid', icon: '🪪', label: 'Flowify ID' },
+]
+
 function LoginScreen({ onSignup, onForgot, onBack }) {
+  const [method, setMethod] = useState('email') // 'email' | 'phone' | 'flowid'
   const [identifier, setIdentifier] = useState('')
   const [password, setPassword] = useState('')
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
 
+  // Same idea as the signup/forgot screens: a phone identifier always
+  // carries at least a dial code from PhoneField, so a plain
+  // non-empty check would let someone submit with no digits typed at all.
+  const canLogin =
+    !!password &&
+    (method === 'phone' ? identifier.replace(/\D/g, '').length >= 6 : identifier.trim().length > 0)
+
+  function handleMethodChange(next) {
+    setMethod(next)
+    setIdentifier(next === 'phone' ? '+91' : '')
+  }
+
   async function handleLogin() {
     setError('')
     const trimmed = identifier.trim()
-    if (!trimmed || !password) return
+    if (!canLogin) return
     setLoading(true)
 
     let email = trimmed
@@ -217,13 +246,29 @@ function LoginScreen({ onSignup, onForgot, onBack }) {
       <h2>Welcome back</h2>
       <p className="authx-sub">Log in with your email, phone number, or Flowify ID.</p>
 
-      <div className="authx-field-label">Email, phone, or Flowify ID</div>
-      <input
-        type="text"
-        value={identifier}
-        onChange={(e) => setIdentifier(e.target.value)}
-        placeholder="you@example.com · +1 555 0100 · AB-1234"
-      />
+      <div className="authx-method-row authx-method-row-3">
+        {LOGIN_METHODS.map((m) => (
+          <div
+            key={m.key}
+            className={'authx-method-card' + (method === m.key ? ' active' : '')}
+            onClick={() => handleMethodChange(m.key)}
+          >
+            <div className="ic">{m.icon}</div>
+            <div className="t">{m.label}</div>
+          </div>
+        ))}
+      </div>
+
+      <div className="authx-field-label">
+        {method === 'email' ? 'Email address' : method === 'phone' ? 'Phone number' : 'Flowify ID'}
+      </div>
+      {method === 'email' && (
+        <input type="text" value={identifier} onChange={(e) => setIdentifier(e.target.value)} placeholder="you@example.com" />
+      )}
+      {method === 'phone' && <PhoneField value={identifier} onChange={setIdentifier} />}
+      {method === 'flowid' && (
+        <input type="text" value={identifier} onChange={(e) => setIdentifier(e.target.value)} placeholder="AB-1234" />
+      )}
 
       <div className="authx-field-label">Password</div>
       <PasswordField value={password} onChange={setPassword} placeholder="Your password" autoComplete="current-password" />
@@ -234,7 +279,7 @@ function LoginScreen({ onSignup, onForgot, onBack }) {
 
       {error && <div className="authx-error">{error}</div>}
 
-      <button className="authx-primary-btn" disabled={!identifier.trim() || !password || loading} onClick={handleLogin}>
+      <button className="authx-primary-btn" disabled={!canLogin || loading} onClick={handleLogin}>
         {loading ? 'Logging in…' : 'Log in'}
       </button>
       <div className="authx-secondary-link" onClick={onSignup}>New to Flowify? <b>Create an account</b></div>
@@ -251,10 +296,12 @@ function ForgotScreen({ onBackToLogin }) {
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
 
+  const canSend = method === 'email' ? contact.trim().includes('@') : contact.replace(/\D/g, '').length >= 6
+
   async function sendCode() {
     setError('')
     const trimmed = contact.trim()
-    if (!trimmed) return
+    if (!canSend) return
     setLoading(true)
     // shouldCreateUser: false — this is "I forgot my password", not signup,
     // so a mistyped/unknown contact should fail rather than create an account.
@@ -309,27 +356,32 @@ function ForgotScreen({ onBackToLogin }) {
           <p className="authx-sub">Tell us the email or phone number on your account and we'll send a one-time code.</p>
 
           <div className="authx-method-row">
-            <div className={'authx-method-card' + (method === 'email' ? ' active' : '')} onClick={() => setMethod('email')}>
+            <div
+              className={'authx-method-card' + (method === 'email' ? ' active' : '')}
+              onClick={() => { setMethod('email'); setContact('') }}
+            >
               <div className="ic">📧</div>
               <div className="t">Email</div>
             </div>
-            <div className={'authx-method-card' + (method === 'phone' ? ' active' : '')} onClick={() => setMethod('phone')}>
+            <div
+              className={'authx-method-card' + (method === 'phone' ? ' active' : '')}
+              onClick={() => { setMethod('phone'); setContact('+91') }}
+            >
               <div className="ic">📱</div>
               <div className="t">Phone number</div>
             </div>
           </div>
 
           <div className="authx-field-label">{method === 'email' ? 'Email address' : 'Phone number'}</div>
-          <input
-            type="text"
-            value={contact}
-            onChange={(e) => setContact(e.target.value)}
-            placeholder={method === 'email' ? 'you@example.com' : '+1 555 0100'}
-          />
+          {method === 'email' ? (
+            <input type="text" value={contact} onChange={(e) => setContact(e.target.value)} placeholder="you@example.com" />
+          ) : (
+            <PhoneField value={contact} onChange={setContact} />
+          )}
 
           {error && <div className="authx-error">{error}</div>}
 
-          <button className="authx-primary-btn" disabled={!contact.trim() || loading} onClick={sendCode}>
+          <button className="authx-primary-btn" disabled={!canSend || loading} onClick={sendCode}>
             {loading ? 'Sending…' : 'Send code'}
           </button>
           <div className="authx-secondary-link" onClick={onBackToLogin}><b>Back to log in</b></div>
