@@ -3679,6 +3679,210 @@
 }
 
 /* ============================================================
+   Round 9 — Together vs Supporting: a clearer visual split between
+   "we both track it ourselves" (teal, --sync) and "it's their habit,
+   I just watch and cheer" (violet, --authx-brand), on the habit cards,
+   the New Habit modal's who-picker, and each tab's own explainer.
+   ============================================================ */
+
+.badge-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin: -2px 0 10px;
+  position: relative;
+  z-index: 1;
+}
+
+.badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 10.5px;
+  font-weight: 700;
+  padding: 4px 10px;
+  border-radius: 999px;
+  white-space: nowrap;
+}
+
+.badge.together {
+  background: var(--sync-soft);
+  color: var(--sync-deep);
+}
+
+.badge.support {
+  background: var(--authx-brand-soft);
+  color: var(--authx-brand-deep);
+}
+
+.seg button.active.together-active {
+  background: var(--sync-deep);
+}
+
+.seg button.active.support-active {
+  background: var(--authx-brand-deep);
+}
+
+.explainer-card {
+  background: var(--surface);
+  border-radius: 18px;
+  border: 1px solid var(--border);
+  box-shadow: var(--shadow-sm);
+  padding: 16px 18px;
+  display: flex;
+  gap: 12px;
+  align-items: flex-start;
+  margin-bottom: 18px;
+}
+
+.explainer-card .eic {
+  width: 38px;
+  height: 38px;
+  border-radius: 12px;
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 17px;
+}
+
+.explainer-card.together .eic {
+  background: var(--sync-soft);
+  color: var(--sync-deep);
+}
+
+.explainer-card.support .eic {
+  background: var(--authx-brand-soft);
+  color: var(--authx-brand-deep);
+}
+
+.explainer-card h4 {
+  margin: 0 0 3px;
+  font-size: 14px;
+}
+
+.explainer-card.together h4 {
+  color: var(--sync-deep);
+}
+
+.explainer-card.support h4 {
+  color: var(--authx-brand-deep);
+}
+
+.explainer-card p {
+  margin: 0;
+  font-size: 12.5px;
+  color: var(--ink-muted);
+  line-height: 1.5;
+}
+
+.explainer-card .dismiss-btn {
+  flex-shrink: 0;
+  border: none;
+  background: none;
+  color: var(--ink-muted);
+  font-size: 15px;
+  cursor: pointer;
+  line-height: 1;
+  padding: 2px;
+}
+
+.show-explainer {
+  border: none;
+  background: var(--surface-2);
+  color: var(--ink-2);
+  font-size: 11.5px;
+  font-weight: 700;
+  padding: 7px 14px;
+  border-radius: 999px;
+  cursor: pointer;
+  margin-bottom: 18px;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.share-choice-row {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+}
+
+.share-choice {
+  border: 1.5px solid var(--border);
+  border-radius: 16px;
+  padding: 14px;
+  cursor: pointer;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  background: var(--surface);
+}
+
+.share-choice .ic {
+  width: 34px;
+  height: 34px;
+  border-radius: 11px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 16px;
+}
+
+.share-choice.together .ic {
+  background: var(--sync-soft);
+  color: var(--sync-deep);
+}
+
+.share-choice.support .ic {
+  background: var(--authx-brand-soft);
+  color: var(--authx-brand-deep);
+}
+
+.share-choice h5 {
+  margin: 0;
+  font-size: 13.5px;
+}
+
+.share-choice p {
+  margin: 0;
+  font-size: 11.5px;
+  color: var(--ink-muted);
+  line-height: 1.5;
+}
+
+.share-choice.active.together {
+  border-color: var(--sync);
+  background: var(--sync-soft);
+}
+
+.share-choice.active.support {
+  border-color: var(--authx-brand);
+  background: var(--authx-brand-soft);
+}
+
+.share-choice.solo {
+  grid-column: 1 / -1;
+  flex-direction: row;
+  align-items: center;
+}
+
+.share-choice.solo .ic {
+  background: var(--surface-2);
+  color: var(--ink-2);
+}
+
+.share-choice.solo.active {
+  border-color: var(--ink);
+  background: var(--surface-2);
+}
+
+.contact-pick-row-flat {
+  padding-left: 0;
+  margin-top: 0;
+}
+
+/* ============================================================
    Round 7 — the dock (left nav), account popover + profile panel,
    and the signed-out experience (landing / sign up / log in /
    forgot password). Crystal-pastel glass on the brand violet.
@@ -3687,8 +3891,15 @@
 /* ---------- The dock ---------- */
 
 .dock-spacer {
-  width: var(--dock-w-collapsed, 78px);
+  --dock-w-collapsed: 78px;
+  --dock-w-expanded: 240px;
+  width: var(--dock-w-collapsed);
   flex-shrink: 0;
+  transition: width 0.18s ease;
+}
+
+.dock-spacer.expanded {
+  width: var(--dock-w-expanded);
 }
 
 .dock {
@@ -3713,8 +3924,7 @@
   transition: width 0.18s ease;
 }
 
-.dock:hover,
-.dock.pinned {
+.dock.expanded {
   width: var(--dock-w-expanded);
 }
 
@@ -3742,8 +3952,7 @@
   justify-content: center;
 }
 
-.dock:hover .dock-pin,
-.dock.pinned .dock-pin {
+.dock.expanded .dock-pin {
   opacity: 1;
 }
 
@@ -3787,8 +3996,7 @@
   transition: opacity 0.12s ease;
 }
 
-.dock:hover .brand-name,
-.dock.pinned .brand-name {
+.dock.expanded .brand-name {
   opacity: 1;
 }
 
@@ -3866,8 +4074,7 @@
   transition: opacity 0.12s ease;
 }
 
-.dock:hover .dock-item .lbl,
-.dock.pinned .dock-item .lbl {
+.dock.expanded .dock-item .lbl {
   opacity: 1;
 }
 
@@ -3925,8 +4132,7 @@
   min-width: 0;
 }
 
-.dock:hover .dock-user,
-.dock.pinned .dock-user {
+.dock.expanded .dock-user {
   opacity: 1;
 }
 
@@ -4512,6 +4718,46 @@
   padding: 4px;
 }
 
+.authx-phone-field {
+  display: flex;
+  gap: 8px;
+}
+
+.authx-phone-country {
+  flex: 0 0 auto;
+  width: 92px;
+  padding: 12px 8px;
+  border-radius: 12px;
+  border: 1px solid var(--border);
+  font-size: 14px;
+  font-family: inherit;
+  background: var(--surface);
+  color: var(--ink);
+}
+
+.authx-phone-country:focus {
+  outline: none;
+  border-color: var(--authx-brand);
+}
+
+.authx-phone-number {
+  flex: 1;
+  min-width: 0;
+  padding: 12px 14px;
+  border-radius: 12px;
+  border: 1px solid var(--border);
+  font-size: 14px;
+  font-family: inherit;
+  background: var(--surface);
+  color: var(--ink);
+  letter-spacing: 0.02em;
+}
+
+.authx-phone-number:focus {
+  outline: none;
+  border-color: var(--authx-brand);
+}
+
 .authx-method-row {
   display: flex;
   gap: 10px;
@@ -4542,6 +4788,21 @@
 .authx-method-card.active {
   border-color: var(--authx-brand);
   background: var(--authx-brand-soft);
+}
+
+/* Login's 3-way toggle (email/phone/Flowify ID) needs a bit less padding
+   per card than the 2-way signup toggle so all three labels stay on one
+   line at normal card widths. */
+.authx-method-row-3 {
+  gap: 8px;
+}
+
+.authx-method-row-3 .authx-method-card {
+  padding: 12px 6px;
+}
+
+.authx-method-row-3 .authx-method-card .t {
+  font-size: 11.5px;
 }
 
 .authx-otp-row {
