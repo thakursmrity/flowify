@@ -2,17 +2,14 @@ import { useEffect, useRef, useState } from 'react'
 import { supabase } from '../supabaseClient'
 import { todayISO, addDays, computeStreak, bestStreak, monthCells, monthLabel } from '../lib/dates'
 
-// Habits, round 4: categories, a real calendar on every card instead of an
-// abstract heatmap, a click-through detail panel, and three tabs —
-//   My habits   — yours, private by default
-//   Shared      — a habit you and someone else BOTH log, streaks compared
-//   Supporting  — habits other people have shared with you, read-only
-// "Shared" is a different mechanic from "Supporting": Shared is two people
-// each with their own habit row, paired together (habit_pairs, created via
-// the create_shared_habit() function so it can also create the partner's
-// row). Supporting is one-directional watching (habit_shares, round 3).
+// Habits, round 5: shared habits are now a real invite — creating one only
+// sets YOUR side up plus a pending row; the other person has to accept
+// before it starts comparing streaks. Categories are no longer locked to
+// five built-ins — you can add your own (name + color) and change a
+// habit's category later. An overview chart sits above the card grid so
+// you can see every habit's progress at a glance before drilling into one.
 
-const CATS = {
+const BUILTIN_CATS = {
   health: { label: 'Health', icon: '💧', color: 'var(--cat-health)', soft: 'var(--cat-health-soft)' },
   study: { label: 'Study', icon: '📖', color: 'var(--cat-study)', soft: 'var(--cat-study-soft)' },
   finance: { label: 'Finance', icon: '💰', color: 'var(--cat-finance)', soft: 'var(--cat-finance-soft)' },
@@ -20,8 +17,25 @@ const CATS = {
   personal: { label: 'Personal', icon: '✦', color: 'var(--cat-personal)', soft: 'var(--cat-personal-soft)' },
 }
 
+const FALLBACK_CAT = { label: 'Other', icon: '✦', color: 'var(--ink-muted)', soft: 'var(--surface-2)' }
+
+const PALETTE = ['#1f8a8c', '#2f5da8', '#b3791f', '#6a5acd', '#c0447a', '#3f8f52', '#a8433c', '#4a534e']
+
 function initial(name) {
   return (name || '?').charAt(0).toUpperCase()
+}
+
+function hexToRgba(hex, alpha) {
+  const h = (hex || '#999999').replace('#', '')
+  const r = parseInt(h.substring(0, 2), 16)
+  const g = parseInt(h.substring(2, 4), 16)
+  const b = parseInt(h.substring(4, 6), 16)
+  return `rgba(${r}, ${g}, ${b}, ${alpha})`
+}
+
+function slugify(label) {
+  const base = label.toLowerCase().replace(/[^a-z0-9]+/g, '_').replace(/^_+|_+$/g, '').slice(0, 20) || 'cat'
+  return `c_${base}_${Math.random().toString(36).slice(2, 6)}`
 }
 
 function weeklyCounts(doneSet, today, weeksBack) {
@@ -104,9 +118,12 @@ export default function Habits({ profile }) {
   const [logsByHabit, setLogsByHabit] = useState({})
   const [sharesByHabit, setSharesByHabit] = useState({})
   const [contacts, setContacts] = useState([])
+  const [customCats, setCustomCats] = useState([])
   const [loadingMine, setLoadingMine] = useState(true)
 
   const [pairs, setPairs] = useState([])
+  const [incomingInvites, setIncomingInvites] = useState([])
+  const [outgoingInvites, setOutgoingInvites] = useState([])
   const [loadingPairs, setLoadingPairs] = useState(true)
 
   const [supporting, setSupporting] = useState([])
@@ -118,6 +135,7 @@ export default function Habits({ profile }) {
 
   const [openShareId, setOpenShareId] = useState(null)
   const [shareChoice, setShareChoice] = useState('')
+  const [editingCatFor, setEditingCatFor] = useState(null)
 
   const [detail, setDetail] = useState(null) // { type: 'mine'|'shared'|'supporting', ... }
   const [panelMonth, setPanelMonth] = useState({ year: todayYear, month: todayMonthIdx })
@@ -130,8 +148,18 @@ export default function Habits({ profile }) {
   const [modalPartnerId, setModalPartnerId] = useState('')
   const [creatingHabit, setCreatingHabit] = useState(false)
 
+  const [catModalOpen, setCatModalOpen] = useState(false)
+  const [catLabel, setCatLabel] = useState('')
+  const [catColor, setCatColor] = useState(PALETTE[0])
+  const [savingCat, setSavingCat] = useState(false)
+
   const [toastMsg, setToastMsg] = useState('')
   const toastTimer = useRef(null)
+
+  const allCats = { ...BUILTIN_CATS }
+  for (const c of customCats) {
+    allCats[c.key] = { label: c.label, icon: initial(c.label), color: c.color, soft: hexToRgba(c.color, 0.16) }
+  }
 
   function showToast(msg) {
     setToastMsg(msg)
@@ -141,7 +169,7 @@ export default function Habits({ profile }) {
 
   async function loadMine() {
     setLoadingMine(true)
-    const [habitRes, logRes, shareRes, contactRes] = await Promise.all([
+    const [habitRes, logRes, shareRes, contactRes, catRes] = await Promise.all([
       supabase
         .from('habits')
         .select('id, name, category, archived')
@@ -154,9 +182,11 @@ export default function Habits({ profile }) {
         .from('contacts')
         .select('contact_id, profiles:contact_id ( id, display_name )')
         .eq('owner_id', profile.id),
+      supabase.from('habit_categories').select('id, key, label, color').eq('user_id', profile.id).order('created_at', { ascending: true }),
     ])
 
     setHabits(habitRes.data ?? [])
+    setCustomCats(catRes.data ?? [])
 
     const grouped = {}
     for (const row of logRes.data ?? []) {
@@ -188,16 +218,18 @@ export default function Habits({ profile }) {
     setLoadingPairs(true)
     const { data: pairRows } = await supabase
       .from('habit_pairs')
-      .select('id, habit_a_id, user_a_id, habit_b_id, user_b_id')
+      .select('id, habit_a_id, user_a_id, habit_b_id, user_b_id, status')
       .or(`user_a_id.eq.${profile.id},user_b_id.eq.${profile.id}`)
 
     if (!pairRows || pairRows.length === 0) {
       setPairs([])
+      setIncomingInvites([])
+      setOutgoingInvites([])
       setLoadingPairs(false)
       return
     }
 
-    const allHabitIds = [...new Set(pairRows.flatMap((p) => [p.habit_a_id, p.habit_b_id]))]
+    const allHabitIds = [...new Set(pairRows.flatMap((p) => [p.habit_a_id, p.habit_b_id]).filter(Boolean))]
     const otherUserIds = [...new Set(pairRows.map((p) => (p.user_a_id === profile.id ? p.user_b_id : p.user_a_id)))]
 
     const [habitRes, profileRes, logRes] = await Promise.all([
@@ -218,22 +250,41 @@ export default function Habits({ profile }) {
     }
     setLogsByHabit((prev) => ({ ...prev, ...logsById }))
 
-    const list = []
+    const accepted = []
+    const incoming = []
+    const outgoing = []
+
     for (const p of pairRows) {
-      const mineIsA = p.user_a_id === profile.id
-      const myHabitId = mineIsA ? p.habit_a_id : p.habit_b_id
-      const partnerHabitId = mineIsA ? p.habit_b_id : p.habit_a_id
-      const partnerId = mineIsA ? p.user_b_id : p.user_a_id
+      const iAmA = p.user_a_id === profile.id
+      const otherId = iAmA ? p.user_b_id : p.user_a_id
+      const otherName = nameById[otherId] ?? 'Someone'
+
+      if (p.status === 'pending') {
+        const inviterHabit = habitById[p.habit_a_id]
+        if (!inviterHabit) continue
+        const entry = { pairId: p.id, name: inviterHabit.name, category: inviterHabit.category, otherName }
+        if (iAmA) outgoing.push(entry)
+        else incoming.push(entry)
+        continue
+      }
+
+      if (p.status !== 'accepted') continue
+
+      const myHabitId = iAmA ? p.habit_a_id : p.habit_b_id
+      const partnerHabitId = iAmA ? p.habit_b_id : p.habit_a_id
       const myHabit = habitById[myHabitId]
       const partnerHabit = habitById[partnerHabitId]
       if (!myHabit || !partnerHabit || myHabit.archived || partnerHabit.archived) continue
-      list.push({
+      accepted.push({
         pairId: p.id,
         mine: { id: myHabit.id, name: myHabit.name, category: myHabit.category },
-        partner: { id: partnerId, name: nameById[partnerId] ?? 'Someone', habitId: partnerHabit.id },
+        partner: { id: otherId, name: otherName, habitId: partnerHabit.id },
       })
     }
-    setPairs(list)
+
+    setPairs(accepted)
+    setIncomingInvites(incoming)
+    setOutgoingInvites(outgoing)
     setLoadingPairs(false)
   }
 
@@ -327,6 +378,12 @@ export default function Habits({ profile }) {
     await supabase.from('habits').update({ archived: true }).eq('id', id)
   }
 
+  async function changeHabitCategory(habitId, key) {
+    setHabits((prev) => prev.map((h) => (h.id === habitId ? { ...h, category: key } : h)))
+    setEditingCatFor(null)
+    await supabase.from('habits').update({ category: key }).eq('id', habitId)
+  }
+
   async function confirmShare(habitId) {
     if (!shareChoice) return
     const { data, error } = await supabase
@@ -382,6 +439,24 @@ export default function Habits({ profile }) {
     if (next) markNudgesSeen()
   }
 
+  async function acceptInvite(pairId) {
+    const { error } = await supabase.rpc('accept_shared_habit', { p_pair_id: pairId })
+    if (error) {
+      showToast(error.message || 'Could not accept that invite')
+      return
+    }
+    showToast('Joined — check the Shared tab')
+    setBellOpen(false)
+    await Promise.all([loadMine(), loadPairs()])
+  }
+
+  async function declineInvite(pairId) {
+    const { error } = await supabase.rpc('decline_shared_habit', { p_pair_id: pairId })
+    showToast(error ? 'Could not decline that invite' : 'Invite declined')
+    setBellOpen(false)
+    await loadPairs()
+  }
+
   function openModal() {
     setModalName('')
     setModalCategory('health')
@@ -395,16 +470,17 @@ export default function Habits({ profile }) {
     if (!name) return
     setCreatingHabit(true)
     if (modalWho === 'together') {
+      const partnerName = contacts.find((c) => c.id === modalPartnerId)?.display_name ?? 'them'
       const { error } = await supabase.rpc('create_shared_habit', {
         p_name: name,
         p_category: modalCategory,
         p_partner_id: modalPartnerId,
       })
       if (error) {
-        showToast(error.message || 'Could not create that shared habit')
+        showToast(error.message || 'Could not send that invite')
       } else {
         await loadPairs()
-        showToast('Shared habit created')
+        showToast(`Invite sent to ${partnerName} — it'll show as Shared once they accept`)
       }
     } else {
       const { data, error } = await supabase
@@ -423,24 +499,49 @@ export default function Habits({ profile }) {
     setModalOpen(false)
   }
 
+  async function submitNewCategory() {
+    const label = catLabel.trim()
+    if (!label) return
+    setSavingCat(true)
+    const key = slugify(label)
+    const { data, error } = await supabase
+      .from('habit_categories')
+      .insert({ user_id: profile.id, key, label, color: catColor })
+      .select()
+      .single()
+    if (!error && data) {
+      setCustomCats((prev) => [...prev, data])
+      setModalCategory(data.key)
+      showToast('Category added')
+      setCatModalOpen(false)
+      setCatLabel('')
+      setCatColor(PALETTE[0])
+    } else {
+      showToast('Could not add that category')
+    }
+    setSavingCat(false)
+  }
+
   function openMineDetail(h) {
     setPanelMonth({ year: todayYear, month: todayMonthIdx })
     setPanelView('calendar')
-    setDetail({ type: 'mine', habit: h })
+    setEditingCatFor(null)
+    setDetail({ type: 'mine', habitId: h.id })
   }
 
   function openSharedDetail(pair) {
     setPanelMonth({ year: todayYear, month: todayMonthIdx })
-    setDetail({ type: 'shared', pair })
+    setDetail({ type: 'shared', pairId: pair.pairId })
   }
 
   function openSupportDetail(person, habit) {
     setPanelMonth({ year: todayYear, month: todayMonthIdx })
-    setDetail({ type: 'supporting', person, habit })
+    setDetail({ type: 'supporting', personId: person.ownerId, habitId: habit.id })
   }
 
   function closeDetail() {
     setDetail(null)
+    setEditingCatFor(null)
   }
 
   function shiftPanelMonth(delta) {
@@ -463,7 +564,20 @@ export default function Habits({ profile }) {
     (h) => !pairedMineIds.has(h.id) && (categoryFilter === 'all' || h.category === categoryFilter)
   )
   const activePerson = supporting.find((p) => p.ownerId === activePersonId) ?? supporting[0] ?? null
-  const unseenCount = nudges.filter((n) => !n.seen).length
+  const unseenCount = nudges.filter((n) => !n.seen).length + incomingInvites.length
+
+  const monthPrefix = `${todayYear}-${String(todayMonthIdx + 1).padStart(2, '0')}`
+  const dayOfMonth = now.getDate()
+  const overviewRows = mineVisible
+    .map((h) => {
+      const cat = allCats[h.category] ?? FALLBACK_CAT
+      const doneSet = logsByHabit[h.id] ?? new Set()
+      const doneThisMonth = [...doneSet].filter((d) => d.startsWith(monthPrefix)).length
+      const percent = Math.min(100, Math.round((doneThisMonth / dayOfMonth) * 100))
+      const streak = computeStreak(doneSet, today)
+      return { habit: h, cat, percent, streak }
+    })
+    .sort((a, b) => b.percent - a.percent)
 
   return (
     <div className="view-page-wide habits-v2">
@@ -482,7 +596,18 @@ export default function Habits({ profile }) {
                 <div className="bell-scrim" onClick={() => setBellOpen(false)} />
                 <div className="bell-panel">
                   <div className="bell-panel-title">Recent</div>
-                  {nudges.length === 0 && <div className="bell-item muted">Nothing yet.</div>}
+                  {incomingInvites.length === 0 && nudges.length === 0 && (
+                    <div className="bell-item muted">Nothing yet.</div>
+                  )}
+                  {incomingInvites.map((inv) => (
+                    <div key={inv.pairId} className="bell-item bell-invite">
+                      <div>🤝 <b>{inv.otherName}</b> wants to track "{inv.name}" together</div>
+                      <div className="bell-invite-actions">
+                        <button onClick={() => acceptInvite(inv.pairId)}>Accept</button>
+                        <button onClick={() => declineInvite(inv.pairId)}>Decline</button>
+                      </div>
+                    </div>
+                  ))}
                   {nudges.map((n) => (
                     <div key={n.id} className="bell-item">
                       {n.kind === 'cheer' ? '👏' : '⏰'} {n.message}
@@ -499,7 +624,9 @@ export default function Habits({ profile }) {
       <div className="hx-tabs-row">
         <div className="seg">
           <button className={tab === 'mine' ? 'active' : ''} onClick={() => setTab('mine')}>My habits</button>
-          <button className={tab === 'shared' ? 'active' : ''} onClick={() => setTab('shared')}>Shared</button>
+          <button className={tab === 'shared' ? 'active' : ''} onClick={() => setTab('shared')}>
+            Shared{incomingInvites.length > 0 ? ` (${incomingInvites.length})` : ''}
+          </button>
           <button className={tab === 'supporting' ? 'active' : ''} onClick={() => setTab('supporting')}>Supporting</button>
         </div>
         {tab === 'mine' && (
@@ -507,7 +634,7 @@ export default function Habits({ profile }) {
             <button className={'filter-chip' + (categoryFilter === 'all' ? ' active' : '')} onClick={() => setCategoryFilter('all')}>
               <span className="dot" style={{ background: 'var(--ink)' }} />All
             </button>
-            {Object.entries(CATS).map(([key, c]) => (
+            {Object.entries(allCats).map(([key, c]) => (
               <button
                 key={key}
                 className={'filter-chip' + (categoryFilter === key ? ' active' : '')}
@@ -516,107 +643,153 @@ export default function Habits({ profile }) {
                 <span className="dot" style={{ background: c.color }} />{c.label}
               </button>
             ))}
+            <button className="filter-chip filter-chip-add" onClick={() => setCatModalOpen(true)}>＋ Category</button>
           </div>
         )}
       </div>
 
       {tab === 'mine' && (
-        <div className="grid">
-          {!loadingMine && mineVisible.length === 0 && (
-            <div className="empty-hint">No habits in this category yet. Use "New habit" above to add one.</div>
-          )}
-          {mineVisible.map((h) => {
-            const cat = CATS[h.category] ?? CATS.personal
-            const doneSet = logsByHabit[h.id] ?? new Set()
-            const streak = computeStreak(doneSet, today)
-            const watchers = sharesByHabit[h.id] ?? []
-            const doneToday = doneSet.has(today)
-            return (
-              <div
-                key={h.id}
-                className="hcard"
-                style={{ '--cat': cat.color, '--cat-soft': cat.soft }}
-                onClick={() => openMineDetail(h)}
-              >
-                <div className="hcard-top">
-                  <div className="hcard-icon">{cat.icon}</div>
-                  <div className="hcard-cat">{cat.label}</div>
-                </div>
-                <div className="hcard-name">{h.name}</div>
-                <div className="hcard-streak">
-                  <span className="num accent-num">{streak}</span>
-                  <span className="lbl">day streak</span>
-                </div>
-                <HabitCalendar doneSet={doneSet} color={cat.color} year={todayYear} month={todayMonthIdx} today={today} size="sm" />
-                <div className="hcard-foot">
-                  <div className="watch-avatars">
-                    {watchers.map((w) => <span key={w.shareId} className="mini-avatar">{initial(w.name)}</span>)}
-                  </div>
-                  <button
-                    className={'quick-check' + (doneToday ? ' done' : '')}
-                    onClick={(e) => {
-                      e.stopPropagation()
-                      toggleHabitToday(h.id)
-                    }}
-                  >
-                    {doneToday ? '✓ Done today' : 'Mark done'}
-                  </button>
-                </div>
+        <>
+          {overviewRows.length > 0 && (
+            <div className="overview-card">
+              <div className="overview-head">
+                <span className="overview-title">This month at a glance</span>
+                <span className="overview-sub">Tap a row to open it</span>
               </div>
-            )
-          })}
-        </div>
+              <div className="overview-rows">
+                {overviewRows.map((r) => (
+                  <div key={r.habit.id} className="overview-row" onClick={() => openMineDetail(r.habit)}>
+                    <span className="overview-icon" style={{ background: r.cat.soft, color: r.cat.color }}>{r.cat.icon}</span>
+                    <span className="overview-name">{r.habit.name}</span>
+                    <div className="overview-bar-track">
+                      <div className="overview-bar-fill" style={{ width: `${r.percent}%`, background: r.cat.color }} />
+                    </div>
+                    <span className="overview-pct">{r.percent}%</span>
+                    {r.streak > 0 && <span className="overview-streak">🔥{r.streak}</span>}
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          <div className="grid">
+            {!loadingMine && mineVisible.length === 0 && (
+              <div className="empty-hint">No habits in this category yet. Use "New habit" above to add one.</div>
+            )}
+            {mineVisible.map((h) => {
+              const cat = allCats[h.category] ?? FALLBACK_CAT
+              const doneSet = logsByHabit[h.id] ?? new Set()
+              const streak = computeStreak(doneSet, today)
+              const watchers = sharesByHabit[h.id] ?? []
+              const doneToday = doneSet.has(today)
+              return (
+                <div
+                  key={h.id}
+                  className="hcard"
+                  style={{ '--cat': cat.color, '--cat-soft': cat.soft }}
+                  onClick={() => openMineDetail(h)}
+                >
+                  <div className="hcard-top">
+                    <div className="hcard-icon">{cat.icon}</div>
+                    <div className="hcard-cat">{cat.label}</div>
+                  </div>
+                  <div className="hcard-name">{h.name}</div>
+                  <div className="hcard-streak">
+                    <span className="num accent-num">{streak}</span>
+                    <span className="lbl">day streak</span>
+                  </div>
+                  <HabitCalendar doneSet={doneSet} color={cat.color} year={todayYear} month={todayMonthIdx} today={today} size="sm" />
+                  <div className="hcard-foot">
+                    <div className="watch-avatars">
+                      {watchers.map((w) => <span key={w.shareId} className="mini-avatar">{initial(w.name)}</span>)}
+                    </div>
+                    <button
+                      className={'quick-check' + (doneToday ? ' done' : '')}
+                      onClick={(e) => {
+                        e.stopPropagation()
+                        toggleHabitToday(h.id)
+                      }}
+                    >
+                      {doneToday ? '✓ Done today' : 'Mark done'}
+                    </button>
+                  </div>
+                </div>
+              )
+            })}
+          </div>
+        </>
       )}
 
       {tab === 'shared' && (
-        <div className="grid">
-          {!loadingPairs && pairs.length === 0 && (
-            <div className="empty-hint">
-              Nothing shared yet. Create a habit above and choose "Track it together" to start one with someone in your circle.
+        <>
+          {(incomingInvites.length > 0 || outgoingInvites.length > 0) && (
+            <div className="invites-row">
+              {incomingInvites.map((inv) => (
+                <div key={inv.pairId} className="invite-card">
+                  <div className="invite-text">🤝 <b>{inv.otherName}</b> wants to track "<b>{inv.name}</b>" together with you</div>
+                  <div className="invite-actions">
+                    <button className="invite-accept" onClick={() => acceptInvite(inv.pairId)}>Accept</button>
+                    <button className="invite-decline" onClick={() => declineInvite(inv.pairId)}>Decline</button>
+                  </div>
+                </div>
+              ))}
+              {outgoingInvites.map((inv) => (
+                <div key={inv.pairId} className="invite-card waiting">
+                  <div className="invite-text">Waiting for <b>{inv.otherName}</b> to accept "<b>{inv.name}</b>"</div>
+                </div>
+              ))}
             </div>
           )}
-          {pairs.map((p) => {
-            const cat = CATS[p.mine.category] ?? CATS.personal
-            const myDone = logsByHabit[p.mine.id] ?? new Set()
-            const theirDone = logsByHabit[p.partner.habitId] ?? new Set()
-            const mine = computeStreak(myDone, today)
-            const theirs = computeStreak(theirDone, today)
-            let banner
-            if (mine < theirs - 1) banner = { cls: 'behind', icon: '⏰', msg: `${p.partner.name} is ${theirs - mine} days ahead — catch up today!` }
-            else if (mine > theirs + 1) banner = { cls: 'ahead', icon: '👏', msg: `You're leading by ${mine - theirs} days. Keep it up!` }
-            else banner = { cls: 'even', icon: '🔥', msg: `You and ${p.partner.name} are neck-and-neck` }
-            return (
-              <div
-                key={p.pairId}
-                className="shared-card"
-                style={{ '--cat': cat.color, '--cat-soft': cat.soft }}
-                onClick={() => openSharedDetail(p)}
-              >
-                <div className="shared-top">
-                  <div className="shared-title">
-                    <div className="ic">{cat.icon}</div>
-                    <div>
-                      <h4>{p.mine.name}</h4>
-                      <div className="cat">{cat.label} · with {p.partner.name}</div>
+
+          <div className="grid">
+            {!loadingPairs && pairs.length === 0 && incomingInvites.length === 0 && outgoingInvites.length === 0 && (
+              <div className="empty-hint">
+                Nothing shared yet. Create a habit above and choose "Track it together" to invite someone in your circle.
+              </div>
+            )}
+            {pairs.map((p) => {
+              const cat = allCats[p.mine.category] ?? FALLBACK_CAT
+              const myDone = logsByHabit[p.mine.id] ?? new Set()
+              const theirDone = logsByHabit[p.partner.habitId] ?? new Set()
+              const mine = computeStreak(myDone, today)
+              const theirs = computeStreak(theirDone, today)
+              let banner
+              if (mine < theirs - 1) banner = { cls: 'behind', icon: '⏰', msg: `${p.partner.name} is ${theirs - mine} days ahead — catch up today!` }
+              else if (mine > theirs + 1) banner = { cls: 'ahead', icon: '👏', msg: `You're leading by ${mine - theirs} days. Keep it up!` }
+              else banner = { cls: 'even', icon: '🔥', msg: `You and ${p.partner.name} are neck-and-neck` }
+              return (
+                <div
+                  key={p.pairId}
+                  className="shared-card"
+                  style={{ '--cat': cat.color, '--cat-soft': cat.soft }}
+                  onClick={() => openSharedDetail(p)}
+                >
+                  <div className="shared-top">
+                    <div className="shared-title">
+                      <div className="ic">{cat.icon}</div>
+                      <div>
+                        <h4>{p.mine.name}</h4>
+                        <div className="cat">{cat.label} · with {p.partner.name}</div>
+                      </div>
                     </div>
                   </div>
-                </div>
-                <div className="vs-row">
-                  <div className="vs-person">
-                    <div className="who">You</div>
-                    <div className="streak-num accent-num" style={{ color: cat.color }}>{mine}</div>
+                  <div className="vs-row">
+                    <div className="vs-person">
+                      <div className="who">You</div>
+                      <div className="streak-num accent-num" style={{ color: cat.color }}>{mine}</div>
+                    </div>
+                    <div className="vs-mid">VS</div>
+                    <div className="vs-person">
+                      <div className="who">{p.partner.name}</div>
+                      <div className="streak-num accent-num" style={{ color: cat.color }}>{theirs}</div>
+                    </div>
                   </div>
-                  <div className="vs-mid">VS</div>
-                  <div className="vs-person">
-                    <div className="who">{p.partner.name}</div>
-                    <div className="streak-num accent-num" style={{ color: cat.color }}>{theirs}</div>
-                  </div>
+                  <div className={'nudge-banner ' + banner.cls}>{banner.icon} {banner.msg}</div>
                 </div>
-                <div className={'nudge-banner ' + banner.cls}>{banner.icon} {banner.msg}</div>
-              </div>
-            )
-          })}
-        </div>
+              )
+            })}
+          </div>
+        </>
       )}
 
       {tab === 'supporting' && (
@@ -647,7 +820,7 @@ export default function Habits({ profile }) {
               </div>
               <div className="grid">
                 {activePerson.habits.map((h) => {
-                  const cat = CATS[h.category] ?? CATS.personal
+                  const cat = allCats[h.category] ?? FALLBACK_CAT
                   const streak = computeStreak(h.done, today)
                   return (
                     <div
@@ -685,12 +858,12 @@ export default function Habits({ profile }) {
             <button className="panel-close" onClick={closeDetail}>✕</button>
 
             {detail.type === 'mine' && (() => {
-              const h = detail.habit
-              const cat = CATS[h.category] ?? CATS.personal
+              const h = habits.find((x) => x.id === detail.habitId)
+              if (!h) return null
+              const cat = allCats[h.category] ?? FALLBACK_CAT
               const doneSet = logsByHabit[h.id] ?? new Set()
               const streak = computeStreak(doneSet, today)
               const best = bestStreak(doneSet)
-              const monthPrefix = `${todayYear}-${String(todayMonthIdx + 1).padStart(2, '0')}`
               const thisMonthCount = [...doneSet].filter((d) => d.startsWith(monthPrefix)).length
               const weeks = weeklyCounts(doneSet, today, 8)
               const watchers = sharesByHabit[h.id] ?? []
@@ -698,7 +871,30 @@ export default function Habits({ profile }) {
 
               return (
                 <>
-                  <span className="panel-cat" style={{ background: cat.soft, color: cat.color }}>{cat.icon} {cat.label}</span>
+                  <span
+                    className="panel-cat panel-cat-edit"
+                    style={{ background: cat.soft, color: cat.color }}
+                    onClick={() => setEditingCatFor(editingCatFor === h.id ? null : h.id)}
+                  >
+                    {cat.icon} {cat.label} ✎
+                  </span>
+
+                  {editingCatFor === h.id && (
+                    <div className="cat-pick-row cat-pick-row-inline">
+                      {Object.entries(allCats).map(([key, c]) => (
+                        <button
+                          key={key}
+                          className={'cat-pick' + (h.category === key ? ' active' : '')}
+                          style={h.category === key ? { background: c.color, borderColor: c.color, color: '#fff' } : undefined}
+                          onClick={() => changeHabitCategory(h.id, key)}
+                        >
+                          <span className="dot" style={{ background: c.color }} />{c.label}
+                        </button>
+                      ))}
+                      <button className="cat-pick cat-pick-add" onClick={() => setCatModalOpen(true)}>＋ New</button>
+                    </div>
+                  )}
+
                   <h2 className="panel-title">{h.name}</h2>
 
                   <div className="stat-row">
@@ -776,8 +972,9 @@ export default function Habits({ profile }) {
             })()}
 
             {detail.type === 'shared' && (() => {
-              const p = detail.pair
-              const cat = CATS[p.mine.category] ?? CATS.personal
+              const p = pairs.find((x) => x.pairId === detail.pairId)
+              if (!p) return null
+              const cat = allCats[p.mine.category] ?? FALLBACK_CAT
               const myDone = logsByHabit[p.mine.id] ?? new Set()
               const theirDone = logsByHabit[p.partner.habitId] ?? new Set()
               const mineStreak = computeStreak(myDone, today)
@@ -811,8 +1008,10 @@ export default function Habits({ profile }) {
             })()}
 
             {detail.type === 'supporting' && (() => {
-              const { person, habit } = detail
-              const cat = CATS[habit.category] ?? CATS.personal
+              const person = supporting.find((x) => x.ownerId === detail.personId)
+              const habit = person?.habits.find((x) => x.id === detail.habitId)
+              if (!person || !habit) return null
+              const cat = allCats[habit.category] ?? FALLBACK_CAT
               const doneSet = habit.done
               const streak = computeStreak(doneSet, today)
               const best = bestStreak(doneSet)
@@ -860,7 +1059,7 @@ export default function Habits({ profile }) {
 
             <div className="field-label">Category</div>
             <div className="cat-pick-row">
-              {Object.entries(CATS).map(([key, c]) => (
+              {Object.entries(allCats).map(([key, c]) => (
                 <button
                   key={key}
                   className={'cat-pick' + (modalCategory === key ? ' active' : '')}
@@ -870,6 +1069,7 @@ export default function Habits({ profile }) {
                   <span className="dot" style={{ background: c.color }} />{c.label}
                 </button>
               ))}
+              <button className="cat-pick cat-pick-add" onClick={() => setCatModalOpen(true)}>＋ New</button>
             </div>
 
             <div className="field-label">Who's tracking this?</div>
@@ -878,7 +1078,7 @@ export default function Habits({ profile }) {
                 <span className="rd" />Just me — private
               </div>
               <div className={'who-pick' + (modalWho === 'together' ? ' active' : '')} onClick={() => setModalWho('together')}>
-                <span className="rd" />Track it together — both of us check in, streaks compared
+                <span className="rd" />Track it together — invite someone, they accept, then both streaks compare
               </div>
               {modalWho === 'together' && (
                 <div className="contact-pick-row">
@@ -906,7 +1106,45 @@ export default function Habits({ profile }) {
                 disabled={!modalName.trim() || (modalWho === 'together' && !modalPartnerId) || creatingHabit}
                 onClick={submitNewHabit}
               >
-                {creatingHabit ? 'Creating…' : 'Create habit'}
+                {creatingHabit ? (modalWho === 'together' ? 'Sending…' : 'Creating…') : modalWho === 'together' ? 'Send invite' : 'Create habit'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {catModalOpen && (
+        <div className="modal-backdrop" onClick={(e) => { if (e.target === e.currentTarget) setCatModalOpen(false) }}>
+          <div className="modal modal-sm">
+            <h3>New category</h3>
+            <p className="sub">Give it a name and a color — it'll show up everywhere alongside the built-in ones.</p>
+
+            <div className="field-label">Name</div>
+            <input
+              type="text"
+              placeholder="e.g. Home, Music, Side project"
+              value={catLabel}
+              onChange={(e) => setCatLabel(e.target.value)}
+              maxLength={40}
+            />
+
+            <div className="field-label">Color</div>
+            <div className="color-pick-row">
+              {PALETTE.map((c) => (
+                <button
+                  key={c}
+                  className={'color-pick' + (catColor === c ? ' active' : '')}
+                  style={{ background: c }}
+                  onClick={() => setCatColor(c)}
+                  aria-label={c}
+                />
+              ))}
+            </div>
+
+            <div className="modal-actions">
+              <button className="btn-cancel" onClick={() => setCatModalOpen(false)}>Cancel</button>
+              <button className="btn-create" disabled={!catLabel.trim() || savingCat} onClick={submitNewCategory}>
+                {savingCat ? 'Adding…' : 'Add category'}
               </button>
             </div>
           </div>
