@@ -12,3 +12,18 @@ export function generateFlowIdSuggestion() {
   const digits = String(Math.floor(1000 + Math.random() * 9000))
   return `${letters}-${digits}`
 }
+
+// A short, deliberately small list — not every country on earth, just the
+// common ones — with how many local digits each expects, so PhoneField's
+// number input can be digit-only and capped to a sane length per country
+// instead of accepting anything typed. Defaults to India first since
+// that's Flowify's primary market.
+export const PHONE_COUNTRIES = [
+  { code: 'IN', name: 'India', dial: '+91', flag: '🇮🇳', maxDigits: 10 },
+  { code: 'US', name: 'United States', dial: '+1', flag: '🇺🇸', maxDigits: 10 },
+  { code: 'GB', name: 'United Kingdom', dial: '+44', flag: '🇬🇧', maxDigits: 10 },
+  { code: 'CA', name: 'Canada', dial: '+1', flag: '🇨🇦', maxDigits: 10 },
+  { code: 'AE', name: 'United Arab Emirates', dial: '+971', flag: '🇦🇪', maxDigits: 9 },
+  { code: 'AU', name: 'Australia', dial: '+61', flag: '🇦🇺', maxDigits: 9 },
+  { code: 'SG', name: 'Singapore', dial: '+65', flag: '🇸🇬', maxDigits: 8 },
+]
